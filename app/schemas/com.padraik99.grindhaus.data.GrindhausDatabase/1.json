@@ -1,0 +1,110 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "26e935fb3ee190db7bf1bead96f46527",
+    "entities": [
+      {
+        "tableName": "beans",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `roaster` TEXT NOT NULL, `origin` TEXT, `species` TEXT NOT NULL, `caffeine_fraction` REAL NOT NULL, `roast_level` TEXT NOT NULL, `roast_date` INTEGER, `purchase_date` INTEGER, `bag_grams` REAL, `pre_ground` INTEGER NOT NULL, `label_photo_path` TEXT, `tasting_tags` TEXT NOT NULL, `notes` TEXT NOT NULL, `archived` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roaster",
+            "columnName": "roaster",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "origin",
+            "columnName": "origin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "species",
+            "columnName": "species",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "caffeineFraction",
+            "columnName": "caffeine_fraction",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roastLevel",
+            "columnName": "roast_level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roastDate",
+            "columnName": "roast_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "purchaseDate",
+            "columnName": "purchase_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bagGrams",
+            "columnName": "bag_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "preGround",
+            "columnName": "pre_ground",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "labelPhotoPath",
+            "columnName": "label_photo_path",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tastingTags",
+            "columnName": "tasting_tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archived",
+            "columnName": "archived",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '26e935fb3ee190db7bf1bead96f46527')"
+    ]
+  }
+}

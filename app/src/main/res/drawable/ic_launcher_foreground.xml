@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder icon: a crema-coloured coffee bean on the 108dp adaptive canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-30">
+        <path
+            android:fillColor="@color/crema"
+            android:pathData="M54,32 C66,32 74,42 74,54 C74,66 66,76 54,76 C42,76 34,66 34,54 C34,42 42,32 54,32 Z" />
+        <path
+            android:fillColor="@color/roast"
+            android:pathData="M53,35 C47,44 61,50 55,58 C50,65 54,70 55,73 L53,73 C51,70 47,64 52,57 C57,50 44,44 51,35 Z" />
+    </group>
+</vector>
