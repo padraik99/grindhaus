@@ -6,13 +6,12 @@ A personal Android app for a Pixel 8 Pro: it remembers how each bean was dialed 
 
 ## Getting the app onto the phone
 
-Every push to GitHub builds the app and runs the tests (the **Actions** tab).
+Every push to GitHub builds the app and runs the tests (the **Actions** tab). Each green build of `main` is published as a release with a plain `.apk` attached.
 
-1. Open the repository on GitHub, then **Actions**, then the latest green run.
-2. Under **Artifacts**, download `grindhaus-debug-apk` and unzip it.
-3. Copy the `.apk` to the phone and open it. Android asks once to allow installs from that source.
+- **Easiest:** point [Obtainium](https://github.com/ImranR98/Obtainium) at this repository once. It installs each new release as an update.
+- **By hand:** open **Releases** (or `/releases/latest`), tap the `.apk`, and install. Android asks once to allow installs from that source.
 
-A red run means something failed; the APK from that run should not be installed.
+Every build is signed with the same committed debug key, so new builds install over old ones and keep the app's data. A red build never becomes a release.
 
 ## What is checked automatically
 
