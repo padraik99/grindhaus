@@ -2,7 +2,7 @@
 
 A personal Android app for a Pixel 8 Pro: it remembers how each bean was dialed in, logs every brew with a taste rating, and estimates how much caffeine will still be in the body at bedtime. Everything stays on the phone.
 
-**Status:** skeleton (build step 3 of 10). Three tabs, the caffeine engine with tests, and the first database table. The full spec lives in the "Grindhaus Spec v2" doc.
+**Status:** build step 4 of 10. Three tabs, the caffeine engine with sourced estimates for every brew method and tea, and the first database table. The full spec lives in the "Grindhaus Spec v2" doc.
 
 ## Getting the app onto the phone
 
@@ -16,6 +16,8 @@ Every build is signed with the same committed debug key, so new builds install o
 ## What is checked automatically
 
 - Caffeine engine: absorption peak, half-life decay, summed doses, the derived bedtime limit (32 mg at a 5 h half-life), and the after-bedtime check that catches a late cup.
+- Caffeine estimates: each brew method's figure is pinned by a test to the study it came from; species scaling (robusta, decaf, blends, not sure); tea per mug.
+- Sleep planner: latest time a drink still fits, e.g. after a 9:00 double, black tea until about 3:15 pm.
 - Bedtime clock: after-midnight bedtimes and daylight-saving changes.
 - Database: beans are archived, never deleted.
 - Screens rendered on a simulated phone and saved as screenshots (the `screenshots` artifact on each run).
@@ -39,4 +41,8 @@ Requires JDK 21 and the Android SDK. `./gradlew recordRoborazziDebug assembleDeb
 
 ## Sources for the caffeine numbers
 
-- Gardiner C, et al. The effect of caffeine on subsequent sleep: a systematic review and meta-analysis. *Sleep Med Rev.* 2023;69:101764. doi:10.1016/j.smrv.2023.101764
+- Gardiner C, et al. The effect of caffeine on subsequent sleep: a systematic review and meta-analysis. *Sleep Med Rev.* 2023;69:101764. doi:10.1016/j.smrv.2023.101764 (bedtime limit)
+- Schmieder BKL, et al. Influence of flow rate, particle size, and temperature on espresso extraction kinetics. *Foods.* 2023;12:2871. doi:10.3390/foods12152871 (espresso by ratio)
+- Angeloni G, et al. What kind of coffee do you drink? An investigation on effects of eight different extraction methods. *Food Res Int.* 2019 (moka, AeroPress, pour-over, French press)
+- Tfouni SAV, et al. Caffeine in teas: levels, transference to infusion and estimated intake. *Food Sci Technol.* 2018;38(4):661-666. doi:10.1590/1678-457X.12217 (tea)
+- Crozier TWM, et al. Espresso coffees, caffeine and chlorogenic acid intake: potential health implications. *Food Funct.* 2012 (real-world spread)

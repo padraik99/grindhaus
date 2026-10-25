@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.padraik99.grindhaus.domain.Species
 
 @RunWith(AndroidJUnit4::class)
 class BeanDaoTest {
@@ -43,8 +44,12 @@ class BeanDaoTest {
     }
 
     @Test
-    fun caffeineFractionDefaultsFromSpecies() = runBlocking {
-        dao.insert(Bean(title = "Robusta lot", roaster = "Roaster", species = Species.ROBUSTA, roastLevel = RoastLevel.DARK))
-        assertEquals(0.022, dao.active().single().caffeineFraction, 1e-9)
+    fun newBeansDefaultToNotSureAndKeepTheirSpecies() = runBlocking {
+        dao.insert(Bean(title = "Unlabelled", roaster = "Roaster", roastLevel = RoastLevel.MEDIUM))
+        dao.insert(Bean(title = "Blend", roaster = "Roaster", species = Species.BLEND, robustaShare = 0.3, roastLevel = RoastLevel.DARK))
+        val byTitle = dao.active().associateBy { it.title }
+        assertEquals(Species.NOT_SURE, byTitle.getValue("Unlabelled").species)
+        assertEquals(Species.BLEND, byTitle.getValue("Blend").species)
+        assertEquals(0.3, byTitle.getValue("Blend").robustaShare!!, 1e-9)
     }
 }

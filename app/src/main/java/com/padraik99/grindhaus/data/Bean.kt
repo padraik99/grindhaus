@@ -3,8 +3,7 @@ package com.padraik99.grindhaus.data
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-
-enum class Species { ARABICA, ROBUSTA, BLEND, DECAF }
+import com.padraik99.grindhaus.domain.Species
 
 enum class RoastLevel { LIGHT, MEDIUM, MEDIUM_DARK, DARK }
 
@@ -14,9 +13,10 @@ data class Bean(
     val title: String,
     val roaster: String,
     val origin: String? = null,
-    val species: Species = Species.ARABICA,
-    /** Caffeine by weight. Defaults from species; editable per bean. */
-    @ColumnInfo(name = "caffeine_fraction") val caffeineFraction: Double = defaultCaffeineFraction(species),
+    /** Defaults to "not sure"; a label saying 100% arabica settles it. */
+    val species: Species = Species.NOT_SURE,
+    /** Robusta fraction of a blend, 0..1. Only used when [species] is BLEND. */
+    @ColumnInfo(name = "robusta_share") val robustaShare: Double? = null,
     @ColumnInfo(name = "roast_level") val roastLevel: RoastLevel,
     /** Epoch milliseconds. */
     @ColumnInfo(name = "roast_date") val roastDate: Long? = null,
@@ -29,11 +29,3 @@ data class Bean(
     val notes: String = "",
     val archived: Boolean = false,
 )
-
-/** Approximate textbook values; the user can override per bean. */
-fun defaultCaffeineFraction(species: Species): Double = when (species) {
-    Species.ARABICA -> 0.012
-    Species.ROBUSTA -> 0.022
-    Species.BLEND -> 0.015
-    Species.DECAF -> 0.0003
-}
