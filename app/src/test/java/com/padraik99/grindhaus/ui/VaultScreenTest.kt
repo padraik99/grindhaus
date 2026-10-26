@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -11,16 +12,15 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
-import androidx.room.Room
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.padraik99.grindhaus.AppGraph
 import com.padraik99.grindhaus.data.Bean
-import com.padraik99.grindhaus.data.GrindhausDatabase
+import com.padraik99.grindhaus.testing.TestGraph
 import com.padraik99.grindhaus.data.RoastLevel
+import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Species
 import com.padraik99.grindhaus.ui.theme.GrindhausTheme
-import com.padraik99.grindhaus.ui.vault.VaultViewModel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -41,13 +41,12 @@ class VaultScreenTest {
     val compose = createComposeRule()
 
     private val today = LocalDate.of(2026, 10, 25)
-    private lateinit var db: GrindhausDatabase
+    private lateinit var graph: AppGraph
+    private val db get() = graph.db
 
     @Before
     fun setUp() {
-        db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), GrindhausDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        graph = TestGraph.create(TestGraph.clockAt("2026-10-25T10:00"))
     }
 
     @After
@@ -82,8 +81,7 @@ class VaultScreenTest {
     }
 
     private fun showVault() {
-        val factory = VaultViewModel.factory(db.beanDao()) { today }
-        compose.setContent { GrindhausTheme { GrindhausApp(startTab = Tab.VAULT, vaultFactory = factory) } }
+        compose.setContent { GrindhausTheme { GrindhausApp(startTab = Tab.VAULT, graph = graph) } }
     }
 
     private fun waitForText(text: String, substring: Boolean = false) =
@@ -143,17 +141,53 @@ class VaultScreenTest {
     }
 
     @Test
-    fun archivingMovesABagToTheArchivedList() {
+    fun finishingABagAsksTheTwoQuestionsAndArchivesIt() {
         seed()
+        runBlocking {
+            // Make the Guji the standing favourite.
+            val guji = db.beanDao().active().first { it.title == "Ethiopia Guji" }
+            db.beanDao().setBuyAgain(guji.id, BuyAgain.YES)
+        }
         showVault()
         waitForText("House Espresso")
         compose.onNodeWithText("House Espresso").performClick()
-        waitForText("Archive bean")
-        compose.onNodeWithText("Archive bean").performScrollTo().performClick()
+        waitForText("Finished this bag")
+        compose.onNodeWithText("Finished this bag").performScrollTo().performClick()
+        waitForText("Would you buy it again?")
+        compose.onNodeWithText("Better than Ethiopia Guji?").assertExists()
+        compose.onNodeWithText("Maybe").performClick()
+        compose.onNodeWithText("Worse").performClick()
+        compose.onRoot().captureRoboImage("screenshots/vault_finish_dialog.png")
+        compose.onNodeWithText("Archive").performClick()
         waitForText("Restore to active")
+        compose.onNodeWithText("Maybe again").assertExists()
         compose.onNode(hasContentDescription("Back to Vault")).performClick()
         waitForText("Active · 2")
         compose.onNodeWithText("Archived · 1").performClick()
         waitForText("House Espresso")
+    }
+
+    @Test
+    fun favoritesSortPutsBuyAgainBagsFirst() {
+        seed()
+        runBlocking {
+            val dao = db.beanDao()
+            val beans = dao.active().associateBy { it.title }
+            dao.setBuyAgain(beans.getValue("Colombia Huila").id, BuyAgain.YES)
+            dao.setBuyAgain(beans.getValue("House Espresso").id, BuyAgain.NO)
+        }
+        showVault()
+        waitForText("Favorites")
+        compose.onNodeWithText("Favorites").performClick()
+        compose.waitUntil(5_000) {
+            val titles = compose.onAllNodes(hasText("Colombia Huila") or hasText("Ethiopia Guji") or hasText("House Espresso"))
+                .fetchSemanticsNodes()
+                .sortedBy { it.boundsInRoot.top }
+                .flatMap { n -> n.config.getOrElseNullable(SemanticsProperties.Text) { null }.orEmpty().map { it.text } }
+                .filter { it in setOf("Colombia Huila", "Ethiopia Guji", "House Espresso") }
+            titles == listOf("Colombia Huila", "Ethiopia Guji", "House Espresso")
+        }
+        compose.onNodeWithText("★ Favourite").assertExists()
+        compose.onRoot().captureRoboImage("screenshots/vault_favorites.png")
     }
 }

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import com.padraik99.grindhaus.domain.BuyAgain
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -49,4 +50,37 @@ interface BeanDao {
     suspend fun markOpened(id: Long, epochDay: Long)
 
     suspend fun archive(id: Long) = setArchived(id, true)
+
+    @Query("UPDATE beans SET buy_again = :buyAgain WHERE id = :id")
+    suspend fun setBuyAgain(id: Long, buyAgain: BuyAgain?)
+
+    @Query("UPDATE beans SET rank_score = :score WHERE id = :id")
+    suspend fun setRankScore(id: Long, score: Double)
+
+    @Insert
+    suspend fun insertComparison(comparison: BeanComparison): Long
+
+    /**
+     * The bag to compare a finished one against: the highest-ranked bag you'd buy again
+     * (or might), other than [excludeId]. Ties go to the more recent bag.
+     */
+    @Query(
+        """
+        SELECT * FROM beans
+        WHERE id != :excludeId AND buy_again IN ('YES', 'MAYBE')
+        ORDER BY rank_score DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    fun observeFavourite(excludeId: Long): Flow<Bean?>
+
+    @Query(
+        """
+        SELECT * FROM beans
+        WHERE id != :excludeId AND buy_again IN ('YES', 'MAYBE')
+        ORDER BY rank_score DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun favourite(excludeId: Long): Bean?
 }

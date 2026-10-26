@@ -25,9 +25,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.padraik99.grindhaus.AppGraph
 import com.padraik99.grindhaus.R
+import com.padraik99.grindhaus.ui.brew.BrewRoute
+import com.padraik99.grindhaus.ui.brew.BrewViewModel
+import androidx.compose.ui.platform.LocalContext
+import java.time.LocalDate
 import com.padraik99.grindhaus.domain.CaffeineModel
 import com.padraik99.grindhaus.ui.components.BrandHeader
 import com.padraik99.grindhaus.ui.components.SectionLabel
@@ -45,7 +49,7 @@ enum class Tab(val label: String, @DrawableRes val icon: Int) {
 @Composable
 fun GrindhausApp(
     startTab: Tab = Tab.BREW,
-    vaultFactory: ViewModelProvider.Factory = VaultViewModel.Factory,
+    graph: AppGraph = AppGraph.get(LocalContext.current),
 ) {
     var tab by rememberSaveable { mutableStateOf(startTab) }
     Scaffold(
@@ -72,8 +76,12 @@ fun GrindhausApp(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                Tab.VAULT -> VaultRoute(viewModel(factory = vaultFactory))
-                Tab.BREW -> PlaceholderTab("Brew") { PlaceholderCard("Brew Bar arrives in build step 6.") }
+                Tab.VAULT -> VaultRoute(viewModel(factory = VaultViewModel.factory(graph)))
+                Tab.BREW -> BrewRoute(
+                    viewModel = viewModel(factory = BrewViewModel.factory(graph)),
+                    today = LocalDate.now(graph.clock),
+                    onAddBean = { tab = Tab.VAULT },
+                )
                 Tab.SLEEP -> PlaceholderTab("Sleep") { SleepEnginePreview() }
             }
         }
@@ -89,19 +97,6 @@ private fun PlaceholderTab(title: String, content: @Composable () -> Unit) {
         BrandHeader(title)
         content()
     }
-}
-
-@Composable
-private fun PlaceholderCard(text: String) {
-    Text(
-        text,
-        color = GrindhausColors.Muted,
-        fontSize = 15.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(GrindhausColors.Surface, RoundedCornerShape(20.dp))
-            .padding(20.dp),
-    )
 }
 
 /** Shows the engine is wired in: the derived bedtime limit at three half-lives. */

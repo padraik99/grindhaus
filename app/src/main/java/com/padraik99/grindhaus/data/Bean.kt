@@ -3,6 +3,8 @@ package com.padraik99.grindhaus.data
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.padraik99.grindhaus.domain.BuyAgain
+import com.padraik99.grindhaus.domain.Ranking
 import com.padraik99.grindhaus.domain.Species
 
 enum class RoastLevel(val label: String, val step: Int) {
@@ -42,6 +44,10 @@ data class Bean(
     @ColumnInfo(name = "tasting_tags") val tastingTags: String = "",
     val notes: String = "",
     val archived: Boolean = false,
+    /** Asked when the bag is finished; changeable later. */
+    @ColumnInfo(name = "buy_again") val buyAgain: BuyAgain? = null,
+    /** Built from "better than your favourite?" answers; every bag starts level. */
+    @ColumnInfo(name = "rank_score", defaultValue = "1500.0") val rankScore: Double = Ranking.START,
 ) {
     val tags: List<String>
         get() = tastingTags.split(',').map { it.trim() }.filter { it.isNotEmpty() }

@@ -6,7 +6,11 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.padraik99.grindhaus.AppGraph
+import com.padraik99.grindhaus.testing.TestGraph
 import com.padraik99.grindhaus.ui.theme.GrindhausTheme
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,16 +26,19 @@ class GrindhausAppScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
 
-    @Test
-    fun brewTab() {
-        compose.setContent { GrindhausTheme { GrindhausApp() } }
-        compose.onNodeWithText("GRINDHAUS").assertExists()
-        compose.onRoot().captureRoboImage("screenshots/brew.png")
+    private lateinit var graph: AppGraph
+
+    @Before
+    fun setUp() {
+        graph = TestGraph.create(TestGraph.clockAt("2026-10-26T09:00"))
     }
+
+    @After
+    fun tearDown() = graph.db.close()
 
     @Test
     fun sleepTabShowsDerivedLimits() {
-        compose.setContent { GrindhausTheme { GrindhausApp() } }
+        compose.setContent { GrindhausTheme { GrindhausApp(graph = graph) } }
         compose.onNodeWithText("Sleep").performClick()
         compose.onNodeWithText("5 h  →  32 mg").assertExists()
         compose.onRoot().captureRoboImage("screenshots/sleep.png")

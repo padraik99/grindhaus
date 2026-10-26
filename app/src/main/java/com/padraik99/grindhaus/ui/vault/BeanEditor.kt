@@ -232,8 +232,9 @@ fun BeanEditor(
         }
 
         SectionLabel("Tasting")
-        Field("Tasting tags, separated by commas", tags, { tags = it })
-        Field("Notes", notes, { notes = it }, singleLine = false)
+        Field("Roaster's tasting notes, separated by commas", tags, { tags = it })
+        Field("My notes", notes, { notes = it }, singleLine = false)
+        Hint("Notes on each brew go in the brew log, so they build up over the life of the bag.")
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = ::cancel, modifier = Modifier.weight(1f).height(52.dp)) {

@@ -2,7 +2,7 @@
 
 A personal Android app for a Pixel 8 Pro: it remembers how each bean was dialed in, logs every brew with a taste rating, and estimates how much caffeine will still be in the body at bedtime. Everything stays on the phone.
 
-**Status:** build step 5 of 10. The Vault works: add, edit, search and archive beans, with label photos and a freshness badge. Brew and Sleep tabs are placeholders; the caffeine engine behind them is built and tested. The full spec lives in the "Grindhaus Spec v2" doc.
+**Status:** build step 6 of 10. Brew Bar works: pick a bean and method, see the remembered grind, dose and caffeine, log each brew with a rating and taste, and get a one-step grind suggestion after a sour or bitter result. The Vault keeps beans, label photos, freshness and each bag's dial history, and sorts by favourites from a "buy again?" verdict and comparisons asked when a bag is finished. Sleep is still a placeholder; the engine behind it is built and tested. The full spec lives in the "Grindhaus Spec v2" doc.
 
 ## Getting the app onto the phone
 
@@ -20,8 +20,13 @@ Every build is signed with the same committed debug key, so new builds install o
 - Sleep planner: latest time a drink still fits, e.g. after a 9:00 double, black tea until about 3:15 pm.
 - Bedtime clock: after-midnight bedtimes and daylight-saving changes.
 - Database: beans are archived, never deleted; search; the opening date is recorded once.
+- Database upgrade: a version 1 database (what step 5 created) upgrades to version 2 with every bean intact.
+- Brew logging: caffeine recorded, dial-in memory kept per bean + method + grinder + basket, first brew opens the bag, mistaken brews can be deleted with their caffeine.
+- Grind advice: sour goes one step finer, bitter one step coarser, never past the end of the dial.
+- Favourites: "buy again?" plus one-at-a-time comparisons ranked chess-style (Elo), so a single off-day answer barely moves an established favourite; Favorites sort order.
 - Freshness: days since roast when the bag has a roast date, otherwise days since opening; past best-by is flagged.
 - Vault screens: adding a bean, opening it, archiving it, all driven on a simulated phone.
+- Brew Bar screens: defaults for a new bean, pre-ground handling, logging a sour shot and taking the suggestion, the evening bedtime warning, tea from the header, dial history on the bean page.
 - Label photos: shrinking to 1600 px, turning sideways shots upright, cleanup of cancelled captures.
 - Screens rendered on a simulated phone and saved as screenshots (the `screenshots` artifact on each run).
 
@@ -32,8 +37,8 @@ Not checked until it runs on the phone: the camera app itself, the date picker's
 ```
 app/src/main/java/com/padraik99/grindhaus/
   domain/   caffeine engine and bedtime clock (pure Kotlin, no Android)
-  data/     Room database (beans) and label photo storage
-  ui/       Compose screens: vault/, shared components/, theme/
+  data/     Room database (beans, grinders, dial presets, brew logs, caffeine intake), settings, label photos
+  ui/       Compose screens: brew/, vault/, shared components/, theme/
 app/src/test/   unit, database and screenshot tests
 app/schemas/    exported database schema, one file per version
 ```

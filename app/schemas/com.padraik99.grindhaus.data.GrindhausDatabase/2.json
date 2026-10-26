@@ -1,0 +1,614 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "ca09e58f0457405cc1614d395dd3ad70",
+    "entities": [
+      {
+        "tableName": "beans",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `roaster` TEXT NOT NULL, `origin` TEXT, `species` TEXT NOT NULL, `robusta_share` REAL, `roast_level` TEXT NOT NULL, `roast_date` INTEGER, `best_by_date` INTEGER, `purchase_date` INTEGER, `opened_date` INTEGER, `bag_grams` REAL, `pre_ground` INTEGER NOT NULL, `label_photo_path` TEXT, `tasting_tags` TEXT NOT NULL, `notes` TEXT NOT NULL, `archived` INTEGER NOT NULL, `buy_again` TEXT, `rank_score` REAL NOT NULL DEFAULT 1500.0)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roaster",
+            "columnName": "roaster",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "origin",
+            "columnName": "origin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "species",
+            "columnName": "species",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "robustaShare",
+            "columnName": "robusta_share",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "roastLevel",
+            "columnName": "roast_level",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roastDate",
+            "columnName": "roast_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bestByDate",
+            "columnName": "best_by_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "purchaseDate",
+            "columnName": "purchase_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openedDate",
+            "columnName": "opened_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bagGrams",
+            "columnName": "bag_grams",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "preGround",
+            "columnName": "pre_ground",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "labelPhotoPath",
+            "columnName": "label_photo_path",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tastingTags",
+            "columnName": "tasting_tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archived",
+            "columnName": "archived",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "buyAgain",
+            "columnName": "buy_again",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rankScore",
+            "columnName": "rank_score",
+            "affinity": "REAL",
+            "notNull": true,
+            "defaultValue": "1500.0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "grinders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `min_setting` REAL NOT NULL, `max_setting` REAL NOT NULL, `step` REAL NOT NULL, `finer_is_lower` INTEGER NOT NULL, `range_labels` TEXT NOT NULL, `archived` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minSetting",
+            "columnName": "min_setting",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxSetting",
+            "columnName": "max_setting",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "step",
+            "columnName": "step",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finerIsLower",
+            "columnName": "finer_is_lower",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rangeLabels",
+            "columnName": "range_labels",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "archived",
+            "columnName": "archived",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "dial_presets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bean_id` INTEGER NOT NULL, `method` TEXT NOT NULL, `grinder_id` INTEGER NOT NULL, `filter` TEXT NOT NULL, `grind_setting` REAL, `dose_g` REAL NOT NULL, `out_g` REAL NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`bean_id`) REFERENCES `beans`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`grinder_id`) REFERENCES `grinders`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beanId",
+            "columnName": "bean_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grinderId",
+            "columnName": "grinder_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filter",
+            "columnName": "filter",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grindSetting",
+            "columnName": "grind_setting",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "doseG",
+            "columnName": "dose_g",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outG",
+            "columnName": "out_g",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_dial_presets_bean_id_method_grinder_id_filter",
+            "unique": true,
+            "columnNames": [
+              "bean_id",
+              "method",
+              "grinder_id",
+              "filter"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_dial_presets_bean_id_method_grinder_id_filter` ON `${TABLE_NAME}` (`bean_id`, `method`, `grinder_id`, `filter`)"
+          },
+          {
+            "name": "index_dial_presets_grinder_id",
+            "unique": false,
+            "columnNames": [
+              "grinder_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_dial_presets_grinder_id` ON `${TABLE_NAME}` (`grinder_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "beans",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "bean_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "grinders",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "grinder_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "brew_logs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bean_id` INTEGER NOT NULL, `method` TEXT NOT NULL, `grinder_id` INTEGER NOT NULL, `filter` TEXT NOT NULL, `grind_setting` REAL, `dose_g` REAL NOT NULL, `out_g` REAL NOT NULL, `shot_time_s` INTEGER, `rating` INTEGER, `taste` TEXT, `notes` TEXT NOT NULL, `caffeine_mg` REAL NOT NULL, `brewed_at` INTEGER NOT NULL, FOREIGN KEY(`bean_id`) REFERENCES `beans`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`grinder_id`) REFERENCES `grinders`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beanId",
+            "columnName": "bean_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grinderId",
+            "columnName": "grinder_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filter",
+            "columnName": "filter",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grindSetting",
+            "columnName": "grind_setting",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "doseG",
+            "columnName": "dose_g",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outG",
+            "columnName": "out_g",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shotTimeS",
+            "columnName": "shot_time_s",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "taste",
+            "columnName": "taste",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "caffeineMg",
+            "columnName": "caffeine_mg",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "brewedAt",
+            "columnName": "brewed_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_brew_logs_bean_id",
+            "unique": false,
+            "columnNames": [
+              "bean_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_brew_logs_bean_id` ON `${TABLE_NAME}` (`bean_id`)"
+          },
+          {
+            "name": "index_brew_logs_grinder_id",
+            "unique": false,
+            "columnNames": [
+              "grinder_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_brew_logs_grinder_id` ON `${TABLE_NAME}` (`grinder_id`)"
+          },
+          {
+            "name": "index_brew_logs_brewed_at",
+            "unique": false,
+            "columnNames": [
+              "brewed_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_brew_logs_brewed_at` ON `${TABLE_NAME}` (`brewed_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "beans",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "bean_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "grinders",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "grinder_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "intake_events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `taken_at` INTEGER NOT NULL, `mg` REAL NOT NULL, `source` TEXT NOT NULL, `brew_log_id` INTEGER, `label` TEXT NOT NULL, FOREIGN KEY(`brew_log_id`) REFERENCES `brew_logs`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "takenAt",
+            "columnName": "taken_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mg",
+            "columnName": "mg",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "brewLogId",
+            "columnName": "brew_log_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_intake_events_brew_log_id",
+            "unique": false,
+            "columnNames": [
+              "brew_log_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_intake_events_brew_log_id` ON `${TABLE_NAME}` (`brew_log_id`)"
+          },
+          {
+            "name": "index_intake_events_taken_at",
+            "unique": false,
+            "columnNames": [
+              "taken_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_intake_events_taken_at` ON `${TABLE_NAME}` (`taken_at`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "brew_logs",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "brew_log_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "bean_comparisons",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bean_id` INTEGER NOT NULL, `other_bean_id` INTEGER NOT NULL, `outcome` TEXT NOT NULL, `compared_at` INTEGER NOT NULL, FOREIGN KEY(`bean_id`) REFERENCES `beans`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`other_bean_id`) REFERENCES `beans`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "beanId",
+            "columnName": "bean_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "otherBeanId",
+            "columnName": "other_bean_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "comparedAt",
+            "columnName": "compared_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_bean_comparisons_bean_id",
+            "unique": false,
+            "columnNames": [
+              "bean_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bean_comparisons_bean_id` ON `${TABLE_NAME}` (`bean_id`)"
+          },
+          {
+            "name": "index_bean_comparisons_other_bean_id",
+            "unique": false,
+            "columnNames": [
+              "other_bean_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_bean_comparisons_other_bean_id` ON `${TABLE_NAME}` (`other_bean_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "beans",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "bean_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "beans",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "other_bean_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ca09e58f0457405cc1614d395dd3ad70')"
+    ]
+  }
+}
