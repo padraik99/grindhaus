@@ -103,6 +103,8 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
         beans.insertComparison(BeanComparison(beanId = beanId, otherBeanId = comparedWith, outcome = outcome, comparedAt = clock.millis()))
     }
 
+    suspend fun undoTea(intakeId: Long) = brews.deleteStandaloneIntake(intakeId)
+
     suspend fun logTea(type: TeaType): Long = brews.insertIntake(
         IntakeEvent(
             takenAt = clock.millis(),

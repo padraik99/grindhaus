@@ -203,8 +203,13 @@ class BrewViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch { graph.settings.setAutoApplyGrind(on) }
     }
 
-    fun logTea(type: TeaType) {
-        viewModelScope.launch { repo.logTea(type) }
+    /** [onLogged] gets the new record's id, so the confirmation can offer Undo. */
+    fun logTea(type: TeaType, onLogged: (Long) -> Unit = {}) {
+        viewModelScope.launch { onLogged(repo.logTea(type)) }
+    }
+
+    fun undoTea(intakeId: Long) {
+        viewModelScope.launch { repo.undoTea(intakeId) }
     }
 
     /** Logs a new brew. A blank yield is "not weighed": the planned yield stands in for caffeine. */

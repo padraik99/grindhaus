@@ -80,6 +80,8 @@ class BrewScreenTest {
         waitForText("Espresso range")
         compose.onNodeWithText("Caffeine ~164 mg").assertExists()
         compose.onNodeWithText("1:2").assertExists()
+        // The installed version sits under the wordmark, to check an update landed.
+        waitForText("v0.1.", substring = true)
         compose.onRoot().captureRoboImage("screenshots/brew_bar.png")
     }
 
@@ -142,13 +144,30 @@ class BrewScreenTest {
     }
 
     @Test
-    fun teaIsLoggedFromTheHeader() {
+    fun teaIsLoggedFromTheHeaderWithAConfirmationThatCanUndo() {
         start("10:30", listOf(guji))
         waitForText("+ Tea")
         compose.onNodeWithText("+ Tea").performClick()
         compose.onNodeWithText("Black tea · ~30 mg").performClick()
-        compose.waitUntil(5_000) { runBlocking { graph.db.brewDao().observeIntakeSince(0).first().isNotEmpty() } }
+        waitForText("Black tea logged · ~30 mg")
+        compose.onRoot().captureRoboImage("screenshots/brew_tea_logged.png")
         assertEquals(30.0, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single().mg }, 0.0)
+
+        compose.onNodeWithText("Undo").performClick()
+        compose.waitUntil(5_000) { runBlocking { graph.db.brewDao().observeIntakeSince(0).first().isEmpty() } }
+    }
+
+    @Test
+    fun undoingTeaNeverTouchesABrew() {
+        start("09:00", listOf(guji))
+        waitForText("Log brew")
+        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Yield (g)")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        waitForText("LAST BREW")
+        val brewIntake = runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single() }
+        runBlocking { graph.brewRepository.undoTea(brewIntake.id) }
+        assertEquals(1, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().size })
     }
 
     @Test

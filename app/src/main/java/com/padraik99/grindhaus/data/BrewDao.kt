@@ -69,6 +69,10 @@ interface BrewDao {
     @Query("SELECT * FROM intake_events WHERE taken_at >= :sinceMillis ORDER BY taken_at")
     fun observeIntakeSince(sinceMillis: Long): Flow<List<IntakeEvent>>
 
+    /** Only for tea and other drinks logged on their own; brews go with their log. */
+    @Query("DELETE FROM intake_events WHERE id = :id AND brew_log_id IS NULL")
+    suspend fun deleteStandaloneIntake(id: Long)
+
     @Query("DELETE FROM intake_events WHERE brew_log_id = :brewLogId")
     suspend fun deleteIntakeForLog(brewLogId: Long)
 

@@ -36,6 +36,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -66,9 +67,17 @@ import com.padraik99.grindhaus.domain.TeaType
 import com.padraik99.grindhaus.ui.components.SectionLabel
 import com.padraik99.grindhaus.ui.components.RoastBar
 import com.padraik99.grindhaus.ui.components.color
+import com.padraik99.grindhaus.ui.components.rememberVersionName
 import com.padraik99.grindhaus.ui.theme.GrindhausColors
 import com.padraik99.grindhaus.ui.vault.LabelThumb
 import com.padraik99.grindhaus.ui.vault.freshness
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Locale
 
@@ -78,68 +87,102 @@ fun BrewRoute(viewModel: BrewViewModel, today: LocalDate, onAddBean: () -> Unit)
     var logging by rememberSaveable { mutableStateOf(false) }
     var editingLast by rememberSaveable { mutableStateOf(false) }
     val timer = rememberSaveable(saver = ShotTimerState.Saver) { ShotTimerState() }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val spec = state.spec
     val last = spec?.lastLog
-    when {
-        logging && spec != null -> {
-            BackHandler { logging = false }
-            BrewLogEditor(
-                title = "Log brew",
-                subtitle = "${spec.method.label} · ${spec.filter.label} · ${spec.bean.title}",
-                method = spec.method,
-                grinder = spec.grinder,
-                initial = BrewDraft(
-                    grind = spec.grind,
-                    doseG = spec.doseG,
-                    // Espresso yield starts blank: weigh it, or leave it as "not weighed".
-                    outG = if (spec.method.weighsYield) null else spec.outG,
-                    shotTimeS = timer.seconds,
-                    rating = null,
-                    taste = null,
-                    notes = "",
-                ),
-                plannedOutG = spec.outG,
-                onCancel = { logging = false },
-                onSave = { draft ->
-                    viewModel.saveBrew(draft) {
-                        timer.reset()
-                        logging = false
+    Box(Modifier.fillMaxSize()) {
+        when {
+            logging && spec != null -> {
+                BackHandler { logging = false }
+                BrewLogEditor(
+                    title = "Log brew",
+                    subtitle = "${spec.method.label} · ${spec.filter.label} · ${spec.bean.title}",
+                    method = spec.method,
+                    grinder = spec.grinder,
+                    initial = BrewDraft(
+                        grind = spec.grind,
+                        doseG = spec.doseG,
+                        // Espresso yield starts blank: weigh it, or leave it as "not weighed".
+                        outG = if (spec.method.weighsYield) null else spec.outG,
+                        shotTimeS = timer.seconds,
+                        rating = null,
+                        taste = null,
+                        notes = "",
+                    ),
+                    plannedOutG = spec.outG,
+                    onCancel = { logging = false },
+                    onSave = { draft ->
+                        viewModel.saveBrew(draft) {
+                            timer.reset()
+                            logging = false
+                        }
+                    },
+                )
+            }
+            editingLast && spec != null && last != null -> {
+                BackHandler { editingLast = false }
+                BrewLogEditor(
+                    title = "Edit brew",
+                    subtitle = "${spec.method.label} · ${spec.filter.label} · ${spec.bean.title}",
+                    method = spec.method,
+                    grinder = spec.grinder,
+                    initial = last.toDraft(),
+                    plannedOutG = last.plannedOutG(),
+                    onCancel = { editingLast = false },
+                    onSave = { draft -> viewModel.updateBrew(last, draft) { editingLast = false } },
+                    onDelete = { viewModel.deleteBrew(last) { editingLast = false } },
+                )
+            }
+            else -> BrewBar(
+                state = state,
+                today = today,
+                timer = timer,
+                onSelectBean = viewModel::selectBean,
+                onSelectMethod = viewModel::selectMethod,
+                onSelectFilter = viewModel::selectFilter,
+                onAcceptSuggestion = viewModel::acceptSuggestion,
+                onAutoApply = viewModel::setAutoApply,
+                onTea = { type ->
+                    viewModel.logTea(type) { id ->
+                        scope.launch {
+                            snackbar.currentSnackbarData?.dismiss()
+                            val result = snackbar.showSnackbar(
+                                message = teaConfirmation(type),
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Long,
+                            )
+                            if (result == SnackbarResult.ActionPerformed) viewModel.undoTea(id)
+                        }
                     }
                 },
+                onLog = {
+                    timer.stop()
+                    logging = true
+                },
+                onEditLast = { editingLast = true },
+                onAddBean = onAddBean,
             )
         }
-        editingLast && spec != null && last != null -> {
-            BackHandler { editingLast = false }
-            BrewLogEditor(
-                title = "Edit brew",
-                subtitle = "${spec.method.label} · ${spec.filter.label} · ${spec.bean.title}",
-                method = spec.method,
-                grinder = spec.grinder,
-                initial = last.toDraft(),
-                plannedOutG = last.plannedOutG(),
-                onCancel = { editingLast = false },
-                onSave = { draft -> viewModel.updateBrew(last, draft) { editingLast = false } },
-                onDelete = { viewModel.deleteBrew(last) { editingLast = false } },
-            )
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp)) { data ->
+            Snackbar(
+                modifier = Modifier.border(1.dp, GrindhausColors.Crema.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
+                shape = RoundedCornerShape(14.dp),
+                containerColor = GrindhausColors.SurfaceHigh,
+                contentColor = GrindhausColors.Foam,
+                action = data.visuals.actionLabel?.let { label ->
+                    { TextButton(onClick = data::performAction) { Text(label, color = GrindhausColors.Crema) } }
+                },
+            ) { Text(data.visuals.message) }
         }
-        else -> BrewBar(
-            state = state,
-            today = today,
-            timer = timer,
-            onSelectBean = viewModel::selectBean,
-            onSelectMethod = viewModel::selectMethod,
-            onSelectFilter = viewModel::selectFilter,
-            onAcceptSuggestion = viewModel::acceptSuggestion,
-            onAutoApply = viewModel::setAutoApply,
-            onTea = viewModel::logTea,
-            onLog = {
-                timer.stop()
-                logging = true
-            },
-            onEditLast = { editingLast = true },
-            onAddBean = onAddBean,
-        )
     }
+}
+
+/** "Black tea logged · ~30 mg". It counts toward tonight right away, then shows in "in you" as it absorbs. */
+private fun teaConfirmation(type: TeaType): String = when (type) {
+    TeaType.BLACK -> "Black tea logged · ~30 mg"
+    TeaType.GREEN -> "Green tea logged · ~25 mg"
+    TeaType.HERBAL -> "Herbal tea logged · no caffeine"
 }
 
 @Composable
@@ -262,7 +305,11 @@ fun BrewBar(
 private fun Header(inYouNowMg: Double, onTea: (TeaType) -> Unit) {
     var teaMenu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("GRINDHAUS", color = GrindhausColors.Crema, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.6.sp)
+        Column {
+            Text("GRINDHAUS", color = GrindhausColors.Crema, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.6.sp)
+            val version = rememberVersionName()
+            if (version.isNotEmpty()) Text("v$version", color = GrindhausColors.Muted, fontSize = 10.sp, letterSpacing = 0.5.sp)
+        }
         Spacer(Modifier.weight(1f))
         Text(
             String.format(Locale.US, "%.0f mg in you", inYouNowMg),
