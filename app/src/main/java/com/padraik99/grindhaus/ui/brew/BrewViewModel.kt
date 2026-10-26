@@ -207,36 +207,46 @@ class BrewViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch { repo.logTea(type) }
     }
 
-    fun saveBrew(
-        grind: Double?,
-        doseG: Double,
-        outG: Double,
-        shotTimeS: Int?,
-        rating: Int?,
-        taste: Taste?,
-        notes: String,
-        onSaved: () -> Unit,
-    ) {
+    /** Logs a new brew. A blank yield is "not weighed": the planned yield stands in for caffeine. */
+    fun saveBrew(draft: BrewDraft, onSaved: () -> Unit) {
         val spec = state.value.spec ?: return
         viewModelScope.launch {
+            val outG = draft.outG ?: spec.outG
             val log = BrewLog(
                 beanId = spec.bean.id,
                 method = spec.method.method,
                 grinderId = spec.grinder.id,
                 filter = spec.filter,
-                grindSetting = grind,
-                doseG = doseG,
+                grindSetting = draft.grind,
+                doseG = draft.doseG,
                 outG = outG,
-                shotTimeS = shotTimeS,
-                rating = rating,
-                taste = taste,
-                notes = notes.trim(),
-                caffeineMg = repo.caffeineMg(spec.bean, spec.method.method, doseG, outG),
+                weighed = draft.outG != null,
+                shotTimeS = draft.shotTimeS,
+                rating = draft.rating,
+                taste = draft.taste,
+                notes = draft.notes.trim(),
+                caffeineMg = repo.caffeineMg(spec.bean, spec.method.method, draft.doseG, outG),
                 brewedAt = clock.millis(),
             )
             val autoApply = graph.settings.settings.first().autoApplyGrind
             repo.logBrew(log, spec.bean, spec.grinder, autoApply)
             onSaved()
+        }
+    }
+
+    /** Corrects the last brew. Caffeine and the intake record follow the new numbers. */
+    fun updateBrew(original: BrewLog, draft: BrewDraft, onDone: () -> Unit) {
+        val bean = state.value.spec?.bean?.takeIf { it.id == original.beanId } ?: return
+        viewModelScope.launch {
+            repo.updateBrew(original.withDraft(draft, original.plannedOutG()), bean)
+            onDone()
+        }
+    }
+
+    fun deleteBrew(log: BrewLog, onDone: () -> Unit) {
+        viewModelScope.launch {
+            repo.deleteBrew(log)
+            onDone()
         }
     }
 

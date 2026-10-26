@@ -64,10 +64,13 @@ import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Comparison
 import com.padraik99.grindhaus.domain.Methods
 import com.padraik99.grindhaus.domain.Species
+import com.padraik99.grindhaus.ui.brew.BrewLogEditor
 import com.padraik99.grindhaus.ui.brew.Stars
 import com.padraik99.grindhaus.ui.brew.TasteTag
 import com.padraik99.grindhaus.ui.brew.formatG
 import com.padraik99.grindhaus.ui.brew.formatGrind
+import com.padraik99.grindhaus.ui.brew.plannedOutG
+import com.padraik99.grindhaus.ui.brew.toDraft
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -88,6 +91,7 @@ private const val NEW = 0L
 fun VaultRoute(viewModel: VaultViewModel) {
     var detailId by rememberSaveable { mutableLongStateOf(NONE) }
     var editId by rememberSaveable { mutableLongStateOf(NONE) }
+    var editLogId by rememberSaveable { mutableLongStateOf(NONE) }
 
     when {
         editId != NONE -> {
@@ -114,6 +118,27 @@ fun VaultRoute(viewModel: VaultViewModel) {
             val gramsUsed by remember(detailId) { viewModel.gramsUsed(detailId) }.collectAsState(initial = 0.0)
             val grinders by viewModel.grinders.collectAsStateWithLifecycle()
             val favourite by remember(detailId) { viewModel.favouriteOtherThan(detailId) }.collectAsState(initial = null)
+            val editingLog = logs.firstOrNull { it.id == editLogId }
+            val b = bean
+            if (editLogId != NONE && editingLog != null && b != null) {
+                BackHandler { editLogId = NONE }
+                val method = Methods.spec(editingLog.method)
+                BrewLogEditor(
+                    title = "Edit brew",
+                    subtitle = "${method.label} · ${editingLog.filter.label} · ${b.title}",
+                    method = method,
+                    grinder = grinders.firstOrNull { it.id == editingLog.grinderId } ?: Grinder.MAESTRI_HOUSE,
+                    initial = editingLog.toDraft(),
+                    plannedOutG = editingLog.plannedOutG(),
+                    onCancel = { editLogId = NONE },
+                    onSave = { draft -> viewModel.updateBrew(editingLog, draft, b) { editLogId = NONE } },
+                    onDelete = {
+                        viewModel.deleteLog(editingLog)
+                        editLogId = NONE
+                    },
+                )
+                return
+            }
             bean?.let {
                 BeanDetail(
                     bean = it,
@@ -128,6 +153,7 @@ fun VaultRoute(viewModel: VaultViewModel) {
                     onFinish = { buy, other, outcome -> viewModel.finishBag(it.id, buy, other, outcome) },
                     onUpdateVerdict = { buy, other, outcome -> viewModel.updateVerdict(it.id, buy, other, outcome) },
                     onDeleteLog = viewModel::deleteLog,
+                    onEditLog = { log -> editLogId = log.id },
                 )
             }
         }
@@ -307,6 +333,7 @@ fun BeanDetail(
     onFinish: (BuyAgain?, Long?, Comparison?) -> Unit,
     onUpdateVerdict: (BuyAgain?, Long?, Comparison?) -> Unit,
     onDeleteLog: (BrewLog) -> Unit,
+    onEditLog: (BrewLog) -> Unit = {},
 ) {
     var verdictDialog by rememberSaveable { mutableStateOf(false) }
     if (verdictDialog) {
@@ -377,7 +404,7 @@ fun BeanDetail(
                 SectionLabel("My notes")
                 Text(bean.notes, color = GrindhausColors.FoamDim, fontSize = 14.sp)
             }
-            DialHistory(logs, grinders, onLongPress = { confirmDelete = it })
+            DialHistory(logs, grinders, onClick = onEditLog, onLongPress = { confirmDelete = it })
             Spacer(Modifier.height(8.dp))
             if (bean.archived) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -450,10 +477,15 @@ private fun bagText(bagGrams: Double?, gramsUsed: Double, logs: List<BrewLog>): 
     return "~${left.toInt()} g · ~$brews brews"
 }
 
-/** Every brew of this bag, newest first, with the best one pinned on top. Long-press deletes. */
+/** Every brew of this bag, newest first, with the best one pinned on top. Tap edits, long-press deletes. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DialHistory(logs: List<BrewLog>, grinders: List<Grinder>, onLongPress: (BrewLog) -> Unit) {
+private fun DialHistory(
+    logs: List<BrewLog>,
+    grinders: List<Grinder>,
+    onClick: (BrewLog) -> Unit,
+    onLongPress: (BrewLog) -> Unit,
+) {
     SectionLabel("Dial history")
     if (logs.isEmpty()) {
         Text("Brews you log on the Brew tab appear here with their ratings.", color = GrindhausColors.Muted, fontSize = 13.sp)
@@ -477,7 +509,12 @@ private fun DialHistory(logs: List<BrewLog>, grinders: List<Grinder>, onLongPres
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .combinedClickable(onClickLabel = null, onLongClickLabel = "Delete this brew", onLongClick = { onLongPress(log) }, onClick = {})
+                    .combinedClickable(
+                        onClickLabel = "Edit this brew",
+                        onLongClickLabel = "Delete this brew",
+                        onLongClick = { onLongPress(log) },
+                        onClick = { onClick(log) },
+                    )
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -491,7 +528,7 @@ private fun DialHistory(logs: List<BrewLog>, grinders: List<Grinder>, onLongPres
             }
         }
     }
-    Text("Long-press a brew to delete it.", color = GrindhausColors.Muted, fontSize = 12.sp)
+    Text("Tap a brew to edit it. Long-press to delete.", color = GrindhausColors.Muted, fontSize = 12.sp)
 }
 
 private val HISTORY_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE MMM d · HH:mm", Locale.US)
@@ -502,6 +539,9 @@ private fun describe(log: BrewLog, grinders: List<Grinder>): String = buildStrin
         append(" · grind ").append(formatGrind(g))
         if (grinders.size > 1) grinders.firstOrNull { it.id == log.grinderId }?.let { append(" (").append(it.name).append(")") }
     }
-    append(" · ").append(formatG(log.doseG)).append("→").append(formatG(log.outG)).append(" g")
+    append(" · ").append(formatG(log.doseG)).append("→")
+    if (!log.weighed) append("~")
+    append(formatG(log.outG)).append(" g")
     log.shotTimeS?.let { append(" · ").append(it).append(" s") }
+    if (!log.weighed) append(" · not weighed")
 }

@@ -102,6 +102,12 @@ data class BrewLog(
     @ColumnInfo(name = "caffeine_mg") val caffeineMg: Double,
     /** Epoch milliseconds. */
     @ColumnInfo(name = "brewed_at") val brewedAt: Long,
+    /**
+     * False when the cup wasn't weighed (or the water wasn't measured): [outG] then holds
+     * the planned amount, and caffeine is estimated from it. The brew still counts for
+     * grind and taste.
+     */
+    @ColumnInfo(name = "weighed", defaultValue = "1") val weighed: Boolean = true,
 )
 
 enum class IntakeSource { BREW, TEA, CUSTOM }

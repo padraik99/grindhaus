@@ -105,6 +105,36 @@ class BrewRepositoryTest {
     }
 
     @Test
+    fun correctingABrewRecalculatesItsCaffeineEverywhere() = runBlocking {
+        val bean = newBean()
+        val g = repo.defaultGrinder()
+        val id = repo.logBrew(shot(bean, g, 4.0, Taste.SOUR), bean, g, autoApplyGrind = false)
+        val logged = graph.db.brewDao().log(id)!!
+
+        // The scale was wrong: it was a 1:1 ristretto, not a 1:2.
+        repo.updateBrew(logged.copy(outG = 18.0, taste = Taste.BALANCED), bean)
+
+        val after = graph.db.brewDao().log(id)!!
+        assertEquals(18.0, after.outG, 0.0)
+        assertEquals(Taste.BALANCED, after.taste)
+        assertEquals(117.0, after.caffeineMg, 0.1) // 18 g x 6.5 mg/g
+        val intake = graph.db.brewDao().observeIntakeSince(0).first().single()
+        assertEquals(after.caffeineMg, intake.mg, 1e-9)
+        assertEquals(logged.brewedAt, intake.takenAt)
+    }
+
+    @Test
+    fun anUnweighedBrewIsKeptAndCountedAtThePlannedYield() = runBlocking {
+        val bean = newBean()
+        val g = repo.defaultGrinder()
+        val id = repo.logBrew(shot(bean, g, 4.0, Taste.BALANCED).copy(weighed = false), bean, g, autoApplyGrind = false)
+        val log = graph.db.brewDao().log(id)!!
+        assertEquals(false, log.weighed)
+        assertEquals(163.8, log.caffeineMg, 0.1)
+        assertEquals(4.0, graph.db.brewDao().preset(bean.id, BrewMethod.ESPRESSO, g.id, FilterOption.SINGLE_WALL)!!.grindSetting!!, 0.0)
+    }
+
+    @Test
     fun robustaBeansCountDoubleCaffeine() = runBlocking {
         val bean = newBean(Species.ROBUSTA)
         assertEquals(327.6, repo.caffeineMg(bean, BrewMethod.ESPRESSO, 18.0, 36.0), 0.1)

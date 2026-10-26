@@ -14,6 +14,9 @@ import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Comparison
 import com.padraik99.grindhaus.domain.Freshness
 import com.padraik99.grindhaus.domain.FreshnessRules
+import com.padraik99.grindhaus.ui.brew.BrewDraft
+import com.padraik99.grindhaus.ui.brew.plannedOutG
+import com.padraik99.grindhaus.ui.brew.withDraft
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,6 +118,14 @@ class VaultViewModel(private val graph: AppGraph) : ViewModel() {
 
     fun updateVerdict(beanId: Long, buyAgain: BuyAgain?, comparedWith: Long?, outcome: Comparison?) {
         viewModelScope.launch { graph.brewRepository.updateVerdict(beanId, buyAgain, comparedWith, outcome) }
+    }
+
+    /** Corrects a logged brew; caffeine and the intake record are recalculated. */
+    fun updateBrew(original: BrewLog, draft: BrewDraft, bean: Bean, onDone: () -> Unit) {
+        viewModelScope.launch {
+            graph.brewRepository.updateBrew(original.withDraft(draft, original.plannedOutG()), bean)
+            onDone()
+        }
     }
 
     fun deleteLog(log: BrewLog) {

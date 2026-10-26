@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -75,27 +76,67 @@ import java.util.Locale
 fun BrewRoute(viewModel: BrewViewModel, today: LocalDate, onAddBean: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var logging by rememberSaveable { mutableStateOf(false) }
+    var editingLast by rememberSaveable { mutableStateOf(false) }
+    val timer = rememberSaveable(saver = ShotTimerState.Saver) { ShotTimerState() }
     val spec = state.spec
-    if (logging && spec != null) {
-        BackHandler { logging = false }
-        BrewLogEditor(
-            spec = spec,
-            onCancel = { logging = false },
-            onSave = { grind, dose, out, time, rating, taste, notes ->
-                viewModel.saveBrew(grind, dose, out, time, rating, taste, notes) { logging = false }
-            },
-        )
-    } else {
-        BrewBar(
+    val last = spec?.lastLog
+    when {
+        logging && spec != null -> {
+            BackHandler { logging = false }
+            BrewLogEditor(
+                title = "Log brew",
+                subtitle = "${spec.method.label} · ${spec.filter.label} · ${spec.bean.title}",
+                method = spec.method,
+                grinder = spec.grinder,
+                initial = BrewDraft(
+                    grind = spec.grind,
+                    doseG = spec.doseG,
+                    // Espresso yield starts blank: weigh it, or leave it as "not weighed".
+                    outG = if (spec.method.weighsYield) null else spec.outG,
+                    shotTimeS = timer.seconds,
+                    rating = null,
+                    taste = null,
+                    notes = "",
+                ),
+                plannedOutG = spec.outG,
+                onCancel = { logging = false },
+                onSave = { draft ->
+                    viewModel.saveBrew(draft) {
+                        timer.reset()
+                        logging = false
+                    }
+                },
+            )
+        }
+        editingLast && spec != null && last != null -> {
+            BackHandler { editingLast = false }
+            BrewLogEditor(
+                title = "Edit brew",
+                subtitle = "${spec.method.label} · ${spec.filter.label} · ${spec.bean.title}",
+                method = spec.method,
+                grinder = spec.grinder,
+                initial = last.toDraft(),
+                plannedOutG = last.plannedOutG(),
+                onCancel = { editingLast = false },
+                onSave = { draft -> viewModel.updateBrew(last, draft) { editingLast = false } },
+                onDelete = { viewModel.deleteBrew(last) { editingLast = false } },
+            )
+        }
+        else -> BrewBar(
             state = state,
             today = today,
+            timer = timer,
             onSelectBean = viewModel::selectBean,
             onSelectMethod = viewModel::selectMethod,
             onSelectFilter = viewModel::selectFilter,
             onAcceptSuggestion = viewModel::acceptSuggestion,
             onAutoApply = viewModel::setAutoApply,
             onTea = viewModel::logTea,
-            onLog = { logging = true },
+            onLog = {
+                timer.stop()
+                logging = true
+            },
+            onEditLast = { editingLast = true },
             onAddBean = onAddBean,
         )
     }
@@ -105,6 +146,7 @@ fun BrewRoute(viewModel: BrewViewModel, today: LocalDate, onAddBean: () -> Unit)
 fun BrewBar(
     state: BrewUiState,
     today: LocalDate,
+    timer: ShotTimerState,
     onSelectBean: (Long) -> Unit,
     onSelectMethod: (com.padraik99.grindhaus.domain.BrewMethod) -> Unit,
     onSelectFilter: (com.padraik99.grindhaus.domain.FilterOption) -> Unit,
@@ -112,6 +154,7 @@ fun BrewBar(
     onAutoApply: (Boolean) -> Unit,
     onTea: (TeaType) -> Unit,
     onLog: () -> Unit,
+    onEditLast: () -> Unit,
     onAddBean: () -> Unit,
 ) {
     Column(
@@ -187,7 +230,7 @@ fun BrewBar(
             }
         }
 
-        SpecCard(spec, state.autoApplyGrind, onAcceptSuggestion, onAutoApply)
+        SpecCard(spec, timer, state.autoApplyGrind, onAcceptSuggestion, onAutoApply, onEditLast)
 
         spec.warning?.let { w ->
             Text(
@@ -279,7 +322,14 @@ private fun BeanChip(bean: Bean, today: LocalDate, selected: Boolean, onClick: (
 }
 
 @Composable
-private fun SpecCard(spec: BrewSpec, autoApply: Boolean, onAccept: () -> Unit, onAutoApply: (Boolean) -> Unit) {
+private fun SpecCard(
+    spec: BrewSpec,
+    timer: ShotTimerState,
+    autoApply: Boolean,
+    onAccept: () -> Unit,
+    onAutoApply: (Boolean) -> Unit,
+    onEditLast: () -> Unit,
+) {
     Column(
         Modifier
             .padding(horizontal = 20.dp)
@@ -321,6 +371,7 @@ private fun SpecCard(spec: BrewSpec, autoApply: Boolean, onAccept: () -> Unit, o
                 fontSize = 13.sp,
             )
         }
+        if (spec.method.timesShot) ShotTimer(timer, spec.method.targetTimeS)
 
         spec.lastLog?.let { last ->
             Column(
@@ -328,8 +379,16 @@ private fun SpecCard(spec: BrewSpec, autoApply: Boolean, onAccept: () -> Unit, o
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Box(Modifier.fillMaxWidth().height(1.dp).background(GrindhausColors.Line))
-                SectionLabel("Last brew")
-                LastBrewLine(last, spec.method.timesShot)
+                Row(
+                    Modifier.fillMaxWidth().clickable(onClickLabel = "Edit last brew", onClick = onEditLast),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SectionLabel("Last brew")
+                        LastBrewLine(last, spec.method.timesShot)
+                    }
+                    Text("Edit", color = GrindhausColors.Crema, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
+                }
                 var dismissedFor by rememberSaveable { mutableLongStateOf(-1L) }
                 spec.suggestion?.takeIf { dismissedFor != last.id }?.let { s ->
                     Column(
@@ -372,12 +431,18 @@ private fun AutoApplyRow(on: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 fun LastBrewLine(log: BrewLog, timesShot: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Wraps onto a second line when a long shot line, stars and taste don't fit side by side.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
         val shot = buildString {
-            append("${formatG(log.doseG)} → ${formatG(log.outG)} g")
+            append(if (log.weighed) "${formatG(log.doseG)} → ${formatG(log.outG)} g" else "${formatG(log.doseG)} → ~${formatG(log.outG)} g")
             if (timesShot && log.shotTimeS != null) append(" · ${log.shotTimeS} s")
         }
         Text(shot, color = GrindhausColors.Foam, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+        if (!log.weighed) Text("not weighed", color = GrindhausColors.Muted, fontSize = 12.sp)
         log.rating?.let { Stars(it) }
         log.taste?.let { TasteTag(it) }
     }

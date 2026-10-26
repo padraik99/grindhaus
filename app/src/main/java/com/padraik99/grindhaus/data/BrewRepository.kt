@@ -62,6 +62,16 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
             id
         }
 
+    /**
+     * Saves corrections to a brew. Caffeine is recalculated from the corrected dose and
+     * yield, and today's intake follows. The dial-in memory for next time is left alone.
+     */
+    suspend fun updateBrew(log: BrewLog, bean: Bean) = db.withTransaction {
+        val corrected = log.copy(caffeineMg = caffeineMg(bean, log.method, log.doseG, log.outG))
+        brews.updateLog(corrected)
+        brews.updateIntakeForLog(corrected.id, corrected.caffeineMg, corrected.brewedAt)
+    }
+
     /** Takes back a brew logged by mistake, along with its caffeine. */
     suspend fun deleteBrew(log: BrewLog) = db.withTransaction {
         brews.deleteIntakeForLog(log.id)

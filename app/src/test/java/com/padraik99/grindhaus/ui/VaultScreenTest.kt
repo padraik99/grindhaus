@@ -21,6 +21,12 @@ import com.padraik99.grindhaus.data.RoastLevel
 import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Species
 import com.padraik99.grindhaus.ui.theme.GrindhausTheme
+import com.padraik99.grindhaus.data.BrewLog
+import com.padraik99.grindhaus.domain.BrewMethod
+import com.padraik99.grindhaus.domain.FilterOption
+import com.padraik99.grindhaus.domain.Taste
+import kotlinx.coroutines.flow.first
+import org.junit.Assert.assertEquals
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -189,5 +195,38 @@ class VaultScreenTest {
         }
         compose.onNodeWithText("★ Favourite").assertExists()
         compose.onRoot().captureRoboImage("screenshots/vault_favorites.png")
+    }
+
+    @Test
+    fun tappingABrewInTheHistoryOpensItForEditingOrDeleting() {
+        seed()
+        val gujiId = runBlocking {
+            val guji = db.beanDao().active().first { it.title == "Ethiopia Guji" }
+            val g = graph.brewRepository.defaultGrinder()
+            graph.brewRepository.logBrew(
+                BrewLog(
+                    beanId = guji.id, method = BrewMethod.ESPRESSO, grinderId = g.id, filter = FilterOption.SINGLE_WALL,
+                    grindSetting = 3.0, doseG = 18.0, outG = 36.0, weighed = false, shotTimeS = 29, rating = 4,
+                    taste = Taste.BALANCED, caffeineMg = 163.8, brewedAt = graph.clock.millis(),
+                ),
+                guji, g, autoApplyGrind = false,
+            )
+            guji.id
+        }
+        showVault()
+        waitForText("Ethiopia Guji")
+        compose.onNodeWithText("Ethiopia Guji").performClick()
+        waitForText("Tap a brew to edit it. Long-press to delete.")
+        compose.onNodeWithText("Tap a brew to edit it. Long-press to delete.").performScrollTo()
+        compose.onRoot().captureRoboImage("screenshots/vault_history_unweighed.png")
+        compose.onAllNodes(hasText("not weighed", substring = true))[1].performScrollTo().performClick()
+
+        waitForText("Edit brew")
+        compose.onNodeWithText("Espresso · Single-wall · Ethiopia Guji").assertExists()
+        compose.onNodeWithText("Delete this brew").performScrollTo().performClick()
+        compose.onNodeWithText("Delete").performClick()
+
+        waitForText("Brews you log on the Brew tab appear here with their ratings.")
+        assertEquals(0, runBlocking { db.brewDao().observeLogsForBean(gujiId).first().size })
     }
 }

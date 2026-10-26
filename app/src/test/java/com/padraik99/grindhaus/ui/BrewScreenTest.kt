@@ -169,4 +169,77 @@ class BrewScreenTest {
         compose.onNodeWithText("~322 g · ~17 brews").assertExists()
         compose.onRoot().captureRoboImage("screenshots/vault_bean_history.png")
     }
+
+    @Test
+    fun aShotLeftUnweighedIsMarkedAndCanBeCorrectedLater() {
+        start("09:00", listOf(guji))
+        waitForText("Log brew")
+        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Left blank, this brew is marked not weighed", substring = true)
+        compose.onNode(hasContentDescription("Rate 3 of 5")).performClick()
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+
+        waitForText("not weighed")
+        compose.onNodeWithText("18 → ~36 g").performScrollTo()
+        compose.onRoot().captureRoboImage("screenshots/brew_bar_unweighed.png")
+        val id = runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single().brewLogId!! }
+        assertEquals(false, runBlocking { graph.db.brewDao().log(id)!!.weighed })
+
+        // Later the scale behaves: tap the last brew and fill in the real yield.
+        compose.onNode(hasText("Edit") and hasClickAction()).performScrollTo().performClick()
+        waitForText("Edit brew")
+        compose.onNodeWithText("Yield (g)").performTextReplacement("42")
+        compose.onRoot().captureRoboImage("screenshots/brew_edit.png")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+
+        waitForText("18 → 42 g")
+        assertEquals(0, compose.onAllNodes(hasText("not weighed")).fetchSemanticsNodes().size)
+        val log = runBlocking { graph.db.brewDao().log(id)!! }
+        assertEquals(true, log.weighed)
+        assertEquals(42.0, log.outG, 0.0)
+        assertEquals(log.caffeineMg, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single().mg }, 1e-9)
+    }
+
+    @Test
+    fun deletingTheLastBrewFromItsEditorTakesItOff() {
+        start("09:00", listOf(guji))
+        waitForText("Log brew")
+        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Yield (g)")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        waitForText("LAST BREW")
+
+        compose.onNode(hasText("Edit") and hasClickAction()).performScrollTo().performClick()
+        waitForText("Delete this brew")
+        compose.onNodeWithText("Delete this brew").performScrollTo().performClick()
+        compose.onNodeWithText("Delete").performClick()
+
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("LAST BREW")).fetchSemanticsNodes().isEmpty() }
+        assertEquals(0, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().size })
+    }
+
+    @Test
+    fun theShotTimerFillsTimeInTheLog() {
+        start("09:00", listOf(guji))
+        waitForText("Start timer")
+        compose.onNodeWithText("Start timer").performScrollTo()
+        // The timer ticks every frame, so drive the clock by hand while it runs.
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Start timer").performClick()
+        compose.mainClock.advanceTimeBy(27_300)
+        compose.onRoot().captureRoboImage("screenshots/brew_timer_running.png")
+        compose.onNodeWithText("Stop").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.autoAdvance = true
+        waitForText("Reset")
+
+        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Time (s)")
+        compose.onNode(hasText("Time (s)") and hasText("27")).assertExists()
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+
+        waitForText("18 → ~36 g · 27 s")
+        // Logging clears the timer for the next shot.
+        waitForText("Start timer")
+    }
 }

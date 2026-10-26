@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import androidx.room.Upsert
 import com.padraik99.grindhaus.domain.BrewMethod
 import com.padraik99.grindhaus.domain.FilterOption
@@ -73,6 +74,12 @@ interface BrewDao {
 
     @Delete
     suspend fun deleteLog(log: BrewLog)
+
+    @Update
+    suspend fun updateLog(log: BrewLog)
+
+    @Query("UPDATE intake_events SET mg = :mg, taken_at = :takenAt WHERE brew_log_id = :brewLogId")
+    suspend fun updateIntakeForLog(brewLogId: Long, mg: Double, takenAt: Long)
 
     /** Every rated brew, for the shot-stars tie-breaker in the Favorites sort. */
     @Query("SELECT bean_id, rating FROM brew_logs WHERE rating IS NOT NULL")
