@@ -16,6 +16,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.padraik99.grindhaus.AppGraph
 import com.padraik99.grindhaus.data.Bean
+import com.padraik99.grindhaus.data.ScanResult
+import com.padraik99.grindhaus.data.ProductResult
+import com.padraik99.grindhaus.data.ProductLookup
+import com.padraik99.grindhaus.data.BarcodeScanner
+import com.padraik99.grindhaus.data.BagDetails
 import com.padraik99.grindhaus.testing.TestGraph
 import com.padraik99.grindhaus.data.RoastLevel
 import com.padraik99.grindhaus.domain.BuyAgain
@@ -228,5 +233,116 @@ class VaultScreenTest {
 
         waitForText("Brews you log on the Brew tab appear here with their ratings.")
         assertEquals(0, runBlocking { db.brewDao().observeLogsForBean(gujiId).first().size })
+    }
+
+    /** Rebuilds the app on a fresh database whose scanner reads [code] and whose lookup answers [answer]. */
+    private fun withScanner(code: String?, answer: ProductResult = ProductResult.NotFound): () -> Int {
+        db.close()
+        var asked = 0
+        graph = TestGraph.create(
+            TestGraph.clockAt("2026-10-25T10:00"),
+            products = ProductLookup {
+                asked++
+                answer
+            },
+            scanner = BarcodeScanner { code?.let(ScanResult::Code) ?: ScanResult.Cancelled },
+        )
+        return { asked }
+    }
+
+    private fun openNewCoffee() {
+        showVault()
+        waitForText("New coffee")
+        compose.onNode(hasText("New coffee") and hasClickAction()).performClick()
+        waitForText("Scan barcode", substring = true)
+    }
+
+    @Test
+    fun scanningANewBagFillsInWhatOpenFoodFactsKnows() {
+        withScanner(
+            "0012345678905",
+            ProductResult.Found(
+                BagDetails(
+                    title = "Decaf Medium Roast Ground Coffee", roaster = "Some Roaster", species = Species.DECAF,
+                    roastLevel = RoastLevel.MEDIUM, bagGrams = 340.0, preGround = true,
+                ),
+            ),
+        )
+        openNewCoffee()
+        compose.onNodeWithText("Scan barcode", substring = true).performClick()
+        waitForText("Found on Open Food Facts", substring = true)
+        compose.onRoot().captureRoboImage("screenshots/vault_scan_found.png")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+
+        waitForText("Decaf · caffeine counted at about 3%", substring = true)
+        val bean = runBlocking { db.beanDao().active().single() }
+        assertEquals("Decaf Medium Roast Ground Coffee", bean.title)
+        assertEquals("0012345678905", bean.barcode)
+        assertEquals(true, bean.preGround)
+        assertEquals(340.0, bean.bagGrams!!, 0.0)
+    }
+
+    @Test
+    fun aBagBoughtBeforeIsFilledFromYourOwnVault() {
+        val asked = withScanner("0123456789012")
+        runBlocking {
+            val id = db.beanDao().insert(
+                Bean(
+                    title = "Colombian Anei", roaster = "Local roaster", origin = "Colombia", species = Species.ARABICA,
+                    roastLevel = RoastLevel.MEDIUM, bagGrams = 340.0, tastingTags = "Cocoa, Caramel",
+                    barcode = "0123456789012", buyAgain = BuyAgain.YES,
+                ),
+            )
+            db.beanDao().archive(id)
+        }
+        openNewCoffee()
+        compose.onNodeWithText("Scan barcode", substring = true).performClick()
+        waitForText("You've had this one before", substring = true)
+        compose.onNodeWithText("Last time you said you'd buy it again.", substring = true).assertExists()
+        compose.onRoot().captureRoboImage("screenshots/vault_scan_repeat.png")
+        assertEquals(0, asked())
+
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        waitForText("Arabica")
+        val newBag = runBlocking { db.beanDao().active().single() }
+        assertEquals("Colombian Anei", newBag.title)
+        assertEquals("Cocoa, Caramel", newBag.tastingTags)
+        assertEquals(null, newBag.buyAgain)
+        assertEquals(null, newBag.openedDate)
+    }
+
+    @Test
+    fun anUnknownBarcodeIsStillSavedForNextTime() {
+        withScanner("0099999999990")
+        openNewCoffee()
+        compose.onNodeWithText("Scan barcode", substring = true).performClick()
+        waitForText("Not on Open Food Facts yet", substring = true)
+        compose.onNodeWithText("Name (required)").performTextInput("Mystery decaf")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        waitForText("Mystery decaf")
+        assertEquals("0099999999990", runBlocking { db.beanDao().active().single().barcode })
+    }
+
+    @Test
+    fun cancellingTheScanChangesNothing() {
+        withScanner(null)
+        openNewCoffee()
+        compose.onNodeWithText("Scan barcode", substring = true).performClick()
+        compose.onNodeWithText("Only this button uses the internet", substring = true).assertExists()
+        compose.onNodeWithText("Save").assertIsNotEnabled()
+    }
+
+    @Test
+    fun editingAnExistingBagHasNoScanButton() {
+        seed()
+        showVault()
+        waitForText("Ethiopia Guji")
+        compose.onNodeWithText("Ethiopia Guji").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasContentDescription("Edit bean"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNode(hasContentDescription("Edit bean"), useUnmergedTree = true).performClick()
+        waitForText("Edit coffee")
+        assertEquals(0, compose.onAllNodes(hasText("Scan barcode", substring = true)).fetchSemanticsNodes().size)
     }
 }

@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import android.content.Context
 import com.padraik99.grindhaus.AppGraph
+import com.padraik99.grindhaus.data.BarcodeScanner
+import com.padraik99.grindhaus.data.LookupOutcome
 import com.padraik99.grindhaus.data.Bean
 import com.padraik99.grindhaus.data.BeanRating
 import com.padraik99.grindhaus.data.BrewLog
@@ -127,6 +130,10 @@ class VaultViewModel(private val graph: AppGraph) : ViewModel() {
             onDone()
         }
     }
+
+    fun scannerFor(context: Context): BarcodeScanner = graph.scannerFor(context)
+
+    suspend fun lookupBarcode(barcode: String): LookupOutcome = graph.barcodeLookup.lookup(barcode)
 
     fun deleteLog(log: BrewLog) {
         viewModelScope.launch { graph.brewRepository.deleteBrew(log) }

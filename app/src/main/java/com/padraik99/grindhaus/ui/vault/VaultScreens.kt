@@ -98,9 +98,13 @@ fun VaultRoute(viewModel: VaultViewModel) {
             BackHandler { editId = NONE }
             val existing by remember(editId) { viewModel.bean(editId) }.collectAsState(initial = null)
             if (editId == NEW || existing != null) {
+                val context = LocalContext.current
+                val scanner = remember(context) { viewModel.scannerFor(context) }
                 BeanEditor(
                     initial = if (editId == NEW) null else existing,
                     today = viewModel.today(),
+                    scanner = if (editId == NEW) scanner else null,
+                    lookup = viewModel::lookupBarcode,
                     onCancel = { editId = NONE },
                     onSave = { bean ->
                         viewModel.save(bean) { id ->
@@ -464,6 +468,7 @@ fun Species.label(): String = when (this) {
 private fun speciesDetail(bean: Bean): String = when (bean.species) {
     Species.BLEND -> "Blend · ${((bean.robustaShare ?: 0.0) * 100).toInt()}% robusta"
     Species.NOT_SURE -> "Not sure · estimated as arabica"
+    Species.DECAF -> "Decaf · caffeine counted at about 3%"
     else -> bean.species.label()
 }
 

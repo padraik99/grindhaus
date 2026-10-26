@@ -14,12 +14,17 @@ import androidx.room.RoomDatabase
  *    Room upgrades version 1 automatically and leaves every bean in place.
  * 3. adds brew_logs.weighed (default true), so a shot with no reliable weight can be
  *    logged honestly. Existing brews count as weighed.
+ * 4. adds beans.barcode (empty for existing bags), filled when a bag is added by scanning.
  */
 @Database(
     entities = [Bean::class, Grinder::class, DialPreset::class, BrewLog::class, IntakeEvent::class, BeanComparison::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
+    ],
 )
 abstract class GrindhausDatabase : RoomDatabase() {
 

@@ -48,9 +48,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.padraik99.grindhaus.R
+import com.padraik99.grindhaus.data.BagDetails
+import com.padraik99.grindhaus.data.BarcodeScanner
 import com.padraik99.grindhaus.data.Bean
+import com.padraik99.grindhaus.data.LookupOutcome
+import com.padraik99.grindhaus.data.ScanResult
 import com.padraik99.grindhaus.data.LabelPhotos
 import com.padraik99.grindhaus.data.RoastLevel
+import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Species
 import com.padraik99.grindhaus.ui.components.SectionLabel
 import com.padraik99.grindhaus.ui.components.asEpochDayText
@@ -76,6 +81,9 @@ fun BeanEditor(
     today: LocalDate,
     onCancel: () -> Unit,
     onSave: (Bean) -> Unit,
+    /** Offered on new bags only. */
+    scanner: BarcodeScanner? = null,
+    lookup: suspend (String) -> LookupOutcome = { LookupOutcome.NotFound(it) },
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -97,6 +105,61 @@ fun BeanEditor(
     var notes by rememberSaveable { mutableStateOf(start.notes) }
     var photo by rememberSaveable { mutableStateOf(start.labelPhotoPath) }
     var pendingCapture by rememberSaveable { mutableStateOf<String?>(null) }
+    var barcode by rememberSaveable { mutableStateOf(start.barcode) }
+    var scanStatus by rememberSaveable { mutableStateOf<String?>(null) }
+    var scanning by rememberSaveable { mutableStateOf(false) }
+
+    /** Text fields are filled only if still empty; choices take whatever the lookup knows. */
+    fun fill(d: BagDetails) {
+        if (title.isBlank()) d.title?.let { title = it }
+        if (roaster.isBlank()) d.roaster?.let { roaster = it }
+        if (origin.isBlank()) d.origin?.let { origin = it }
+        d.species?.let { species = it }
+        d.roastLevel?.let { roastLevel = it }
+        if (bagGrams.isBlank()) d.bagGrams?.let { bagGrams = it.roundToInt().toString() }
+        d.preGround?.let { preGround = it }
+    }
+
+    fun scan(s: BarcodeScanner) {
+        scope.launch {
+            scanning = true
+            when (val result = s.scan()) {
+                ScanResult.Cancelled -> Unit
+                is ScanResult.Failed -> scanStatus =
+                    "Couldn't start the scanner. The first time, Google Play services may still be downloading it: " +
+                        "try again in a minute. (${result.reason ?: "no reason given"})"
+                is ScanResult.Code -> {
+                    barcode = result.value
+                    scanStatus = "Looking up ${result.value}…"
+                    val outcome = lookup(result.value)
+                    scanStatus = when (outcome) {
+                        is LookupOutcome.FromVault -> {
+                            val b = outcome.bean
+                            fill(BagDetails(b.title, b.roaster, b.origin, b.species, b.roastLevel, b.bagGrams, b.preGround))
+                            if (b.species == Species.BLEND) b.robustaShare?.let { robustaShare = it }
+                            if (tags.isBlank()) tags = b.tastingTags
+                            val verdict = when (b.buyAgain) {
+                                BuyAgain.YES -> " Last time you said you'd buy it again."
+                                BuyAgain.MAYBE -> " Last time you said maybe."
+                                BuyAgain.NO -> " Last time you said you wouldn't buy it again."
+                                null -> ""
+                            }
+                            "You've had this one before. Filled in from that bag.$verdict Add this bag's dates."
+                        }
+                        is LookupOutcome.Found -> {
+                            fill(outcome.details)
+                            "Found on Open Food Facts. Check what filled in; the roast date and tasting notes are on the bag."
+                        }
+                        is LookupOutcome.NotFound ->
+                            "Not on Open Food Facts yet. Fill it in below; the barcode is saved, so this bag fills itself in next time."
+                        is LookupOutcome.Unavailable ->
+                            "Couldn't reach Open Food Facts. Check the connection, or fill it in below; the barcode is still saved."
+                    }
+                }
+            }
+            scanning = false
+        }
+    }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val temp = pendingCapture?.let(::File)
@@ -137,6 +200,7 @@ fun BeanEditor(
                 labelPhotoPath = photo,
                 tastingTags = tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", "),
                 notes = notes.trim(),
+                barcode = barcode,
             ),
         )
     }
@@ -155,6 +219,19 @@ fun BeanEditor(
             fontSize = 26.sp,
             fontWeight = FontWeight.SemiBold,
         )
+
+        if (scanner != null) {
+            OutlinedButton(
+                onClick = { scan(scanner) },
+                enabled = !scanning,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Icon(painterResource(R.drawable.ic_barcode), contentDescription = null, tint = GrindhausColors.Crema)
+                Text(if (barcode == null) "  Scan barcode" else "  Scan again", color = GrindhausColors.Crema)
+            }
+            scanStatus?.let { Text(it, color = GrindhausColors.FoamDim, fontSize = 13.sp) }
+                ?: Hint("Fills in what it can from your past bags or Open Food Facts. Only this button uses the internet.")
+        }
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             LabelThumb(photo, Modifier.size(width = 76.dp, height = 96.dp))

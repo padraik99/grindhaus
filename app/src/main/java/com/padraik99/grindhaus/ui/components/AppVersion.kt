@@ -11,10 +11,10 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun rememberVersionName(): String {
     val context = LocalContext.current
-    return remember(context) { versionName(context) }
+    return remember(context) { appVersionName(context) }
 }
 
-private fun versionName(context: Context): String = runCatching {
+fun appVersionName(context: Context): String = runCatching {
     val pm = context.packageManager
     val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))

@@ -5,7 +5,11 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.padraik99.grindhaus.AppGraph
+import com.padraik99.grindhaus.data.BarcodeScanner
 import com.padraik99.grindhaus.data.GrindhausDatabase
+import com.padraik99.grindhaus.data.ProductLookup
+import com.padraik99.grindhaus.data.ProductResult
+import com.padraik99.grindhaus.data.ScanResult
 import com.padraik99.grindhaus.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +28,15 @@ object TestGraph {
     fun clockAt(localDateTime: String): Clock =
         Clock.fixed(LocalDateTime.parse(localDateTime).atZone(LA).toInstant(), LA)
 
-    fun create(clock: Clock): AppGraph {
+    /**
+     * Never touches the network or the camera: lookups find nothing and the scanner is
+     * cancelled unless a test supplies its own.
+     */
+    fun create(
+        clock: Clock,
+        products: ProductLookup = ProductLookup { ProductResult.NotFound },
+        scanner: BarcodeScanner = BarcodeScanner { ScanResult.Cancelled },
+    ): AppGraph {
         val context: Context = ApplicationProvider.getApplicationContext()
         val db = Room.inMemoryDatabaseBuilder(context, GrindhausDatabase::class.java)
             .allowMainThreadQueries()
@@ -34,6 +46,6 @@ object TestGraph {
             scope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
             produceFile = { file },
         )
-        return AppGraph(db, SettingsStore(store), clock)
+        return AppGraph(db, SettingsStore(store), clock, products = products, scannerFor = { scanner })
     }
 }

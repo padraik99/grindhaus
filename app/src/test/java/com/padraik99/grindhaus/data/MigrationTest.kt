@@ -77,7 +77,7 @@ class MigrationTest {
             assertEquals(true, bean.preGround)
             assertEquals(null, bean.buyAgain)
             assertEquals(1500.0, bean.rankScore, 0.0)
-            assertEquals(3, db.openHelper.readableDatabase.version)
+            assertEquals(4, db.openHelper.readableDatabase.version)
             assertEquals(0, db.brewDao().observeIntakeSince(0).first().size)
         } finally {
             db.close()
@@ -121,7 +121,43 @@ class MigrationTest {
             assertEquals("First one", log.notes)
             assertEquals(170.0, db.brewDao().observeIntakeSince(0).first().single().mg, 0.0)
             assertEquals(1512.0, db.beanDao().get(1)!!.rankScore, 0.0)
-            assertEquals(3, db.openHelper.readableDatabase.version)
+            assertEquals(4, db.openHelper.readableDatabase.version)
+        } finally {
+            db.close()
+        }
+    }
+
+    /** Version 3 is what 0.1.6 and 0.1.7 put on the phone, including unweighed shots. */
+    @Test
+    fun version3BagsAndUnweighedShotsSurviveAndHaveNoBarcode() = runBlocking {
+        val file = freshFile("upgrade-v3.db")
+        createVersion(3, file) {
+            execSQL(
+                """INSERT INTO beans (id, title, roaster, origin, species, robusta_share, roast_level, roast_date,
+                   best_by_date, purchase_date, opened_date, bag_grams, pre_ground, label_photo_path, tasting_tags,
+                   notes, archived, buy_again, rank_score)
+                   VALUES (1, 'Colombian Anei', 'Roaster', 'Colombia', 'ARABICA', NULL, 'MEDIUM', 20380,
+                   NULL, 20385, 20386, 340.0, 0, NULL, '', '', 0, NULL, 1500.0)""",
+            )
+            execSQL(
+                """INSERT INTO grinders (id, name, min_setting, max_setting, step, finer_is_lower, range_labels, archived)
+                   VALUES (1, 'Maestri House', 0.0, 30.0, 1.0, 1, '5:Espresso', 0)""",
+            )
+            execSQL(
+                """INSERT INTO brew_logs (id, bean_id, method, grinder_id, filter, grind_setting, dose_g, out_g,
+                   shot_time_s, rating, taste, notes, caffeine_mg, brewed_at, weighed)
+                   VALUES (1, 1, 'ESPRESSO', 1, 'SINGLE_WALL', 3.0, 18.0, 36.0, 28, 3, NULL, '', 163.8,
+                   1793000000000, 0)""",
+            )
+        }
+
+        val db = open(file)
+        try {
+            val bean = db.beanDao().get(1)!!
+            assertEquals("Colombian Anei", bean.title)
+            assertEquals(null, bean.barcode)
+            assertEquals(false, db.brewDao().log(1)!!.weighed)
+            assertEquals(4, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }

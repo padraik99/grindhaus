@@ -38,6 +38,10 @@ interface BeanDao {
     @Query("SELECT * FROM beans WHERE archived = 0 ORDER BY COALESCE(purchase_date, roast_date, 0) DESC, id DESC")
     suspend fun active(): List<Bean>
 
+    /** The most recent bag with this barcode, finished or not. */
+    @Query("SELECT * FROM beans WHERE barcode = :barcode ORDER BY id DESC LIMIT 1")
+    suspend fun latestWithBarcode(barcode: String): Bean?
+
     @Query("SELECT COUNT(*) FROM beans WHERE archived = :archived")
     fun observeCount(archived: Boolean): Flow<Int>
 

@@ -48,6 +48,8 @@ data class Bean(
     @ColumnInfo(name = "buy_again") val buyAgain: BuyAgain? = null,
     /** Built from "better than your favourite?" answers; every bag starts level. */
     @ColumnInfo(name = "rank_score", defaultValue = "1500.0") val rankScore: Double = Ranking.START,
+    /** The bag's barcode when it was added by scanning, so a repeat purchase is recognised. */
+    val barcode: String? = null,
 ) {
     val tags: List<String>
         get() = tastingTags.split(',').map { it.trim() }.filter { it.isNotEmpty() }

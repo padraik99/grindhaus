@@ -2,7 +2,7 @@
 
 A personal Android app for a Pixel 8 Pro: it remembers how each bean was dialed in, logs every brew with a taste rating, and estimates how much caffeine will still be in the body at bedtime. Everything stays on the phone.
 
-**Status:** build step 6.5 of 10. Brew Bar works: pick a bean and method, see the remembered grind, dose and caffeine, time the shot, log each brew with a rating and taste, and get a one-step grind suggestion after a sour or bitter result. Any brew can be corrected or deleted later, and a shot whose yield wasn't weighed is kept and marked as such. The Vault keeps beans, label photos, freshness and each bag's dial history, and sorts by favourites from a "buy again?" verdict and comparisons asked when a bag is finished. Sleep is still a placeholder; the engine behind it is built and tested. The full spec lives in the "Grindhaus Spec v2" doc.
+**Status:** build step 6.5 of 10, plus barcode lookup. Brew Bar works: pick a bean and method, see the remembered grind, dose and caffeine, time the shot, log each brew with a rating and taste, and get a one-step grind suggestion after a sour or bitter result. Any brew can be corrected or deleted later, and a shot whose yield wasn't weighed is kept and marked as such. New coffee can be filled in by scanning the bag's barcode: a bag you've had before fills in from your own Vault, otherwise from Open Food Facts. The Vault keeps beans, label photos, freshness and each bag's dial history, and sorts by favourites from a "buy again?" verdict and comparisons asked when a bag is finished. Sleep is still a placeholder; the engine behind it is built and tested. The full spec lives in the "Grindhaus Spec v2" doc.
 
 ## Getting the app onto the phone
 
@@ -20,7 +20,7 @@ Every build is signed with the same committed debug key, so new builds install o
 - Sleep planner: latest time a drink still fits, e.g. after a 9:00 double, black tea until about 3:15 pm.
 - Bedtime clock: after-midnight bedtimes and daylight-saving changes.
 - Database: beans are archived, never deleted; search; the opening date is recorded once.
-- Database upgrades: a version 1 database (step 5) and a version 2 database (0.1.5, with brews and caffeine in it) both upgrade to version 3 with every bean and brew intact.
+- Database upgrades: version 1 (step 5), version 2 (0.1.5, with brews and caffeine) and version 3 (0.1.6 and 0.1.7, with unweighed shots) all upgrade to version 4 with every bean and brew intact.
 - Brew logging: caffeine recorded, dial-in memory kept per bean + method + grinder + basket, first brew opens the bag, mistaken brews can be deleted with their caffeine, and correcting a brew recalculates its caffeine.
 - Grind advice: sour goes one step finer, bitter one step coarser, never past the end of the dial.
 - Favourites: "buy again?" plus one-at-a-time comparisons ranked chess-style (Elo), so a single off-day answer barely moves an established favourite; Favorites sort order.
@@ -28,10 +28,15 @@ Every build is signed with the same committed debug key, so new builds install o
 - Vault screens: adding a bean, opening it, archiving it, all driven on a simulated phone.
 - Brew Bar screens: defaults for a new bean, pre-ground handling, logging a sour shot and taking the suggestion, the evening bedtime warning, tea from the header, dial history on the bean page, an unweighed shot corrected later, deleting from the editor, the shot timer filling Time.
 - Editing from the Vault: tapping a brew in the dial history opens it to edit or delete.
+- Barcode lookup: a bag you've bought before is recognised from the Vault without going online; Open Food Facts answers (a real Lavazza entry, decaf, blends, ounces and pounds, empty entries, the "temporarily unavailable" page) turn into the right fields; an unknown barcode is still saved for next time; editing a bag offers no scan.
 - Label photos: shrinking to 1600 px, turning sideways shots upright, cleanup of cancelled captures.
 - Screens rendered on a simulated phone and saved as screenshots (the `screenshots` artifact on each run).
 
-Not checked until it runs on the phone: the camera app itself, the date picker's feel, the timer's buzz at 25 and 35 s and keeping the screen on, the home-screen widget, and how it feels in the hand.
+Not checked until it runs on the phone: the camera app itself, Google's barcode scanner screen and the live call to Open Food Facts (checked by hand from the build machine, not in the tests), the date picker's feel, the timer's buzz at 25 and 35 s and keeping the screen on, the home-screen widget, and how it feels in the hand.
+
+## Privacy
+
+Everything stays on the phone. The one exception is **Scan barcode** on New coffee: it sends the bag's barcode number, and nothing else, to [Open Food Facts](https://world.openfoodfacts.org), an open product database. The scanner itself is Google Play services', so the app never asks for camera permission.
 
 ## Project layout
 
