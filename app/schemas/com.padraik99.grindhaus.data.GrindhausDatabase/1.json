@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "700513fe7e422c400fa016ec2d712136",
+    "identityHash": "2e66beb4d05c79f296fbd77de3a4e6c6",
     "entities": [
       {
         "tableName": "beans",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `roaster` TEXT NOT NULL, `origin` TEXT, `species` TEXT NOT NULL, `robusta_share` REAL, `roast_level` TEXT NOT NULL, `roast_date` INTEGER, `purchase_date` INTEGER, `bag_grams` REAL, `pre_ground` INTEGER NOT NULL, `label_photo_path` TEXT, `tasting_tags` TEXT NOT NULL, `notes` TEXT NOT NULL, `archived` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `roaster` TEXT NOT NULL, `origin` TEXT, `species` TEXT NOT NULL, `robusta_share` REAL, `roast_level` TEXT NOT NULL, `roast_date` INTEGER, `best_by_date` INTEGER, `purchase_date` INTEGER, `opened_date` INTEGER, `bag_grams` REAL, `pre_ground` INTEGER NOT NULL, `label_photo_path` TEXT, `tasting_tags` TEXT NOT NULL, `notes` TEXT NOT NULL, `archived` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -54,8 +54,18 @@
             "affinity": "INTEGER"
           },
           {
+            "fieldPath": "bestByDate",
+            "columnName": "best_by_date",
+            "affinity": "INTEGER"
+          },
+          {
             "fieldPath": "purchaseDate",
             "columnName": "purchase_date",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openedDate",
+            "columnName": "opened_date",
             "affinity": "INTEGER"
           },
           {
@@ -103,7 +113,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '700513fe7e422c400fa016ec2d712136')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2e66beb4d05c79f296fbd77de3a4e6c6')"
     ]
   }
 }

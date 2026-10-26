@@ -3,11 +3,10 @@ package com.padraik99.grindhaus.ui
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -24,12 +23,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.padraik99.grindhaus.R
 import com.padraik99.grindhaus.domain.CaffeineModel
+import com.padraik99.grindhaus.ui.components.BrandHeader
+import com.padraik99.grindhaus.ui.components.SectionLabel
 import com.padraik99.grindhaus.ui.theme.GrindhausColors
+import com.padraik99.grindhaus.ui.vault.VaultRoute
+import com.padraik99.grindhaus.ui.vault.VaultViewModel
 import java.util.Locale
 
 enum class Tab(val label: String, @DrawableRes val icon: Int) {
@@ -39,7 +43,10 @@ enum class Tab(val label: String, @DrawableRes val icon: Int) {
 }
 
 @Composable
-fun GrindhausApp(startTab: Tab = Tab.BREW) {
+fun GrindhausApp(
+    startTab: Tab = Tab.BREW,
+    vaultFactory: ViewModelProvider.Factory = VaultViewModel.Factory,
+) {
     var tab by rememberSaveable { mutableStateOf(startTab) }
     Scaffold(
         containerColor = GrindhausColors.Roast,
@@ -63,28 +70,24 @@ fun GrindhausApp(startTab: Tab = Tab.BREW) {
             }
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                "GRINDHAUS",
-                color = GrindhausColors.Crema,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.6.sp,
-            )
-            Text(tab.label, color = GrindhausColors.Foam, fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
+        Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                Tab.BREW -> PlaceholderCard("Brew Bar arrives in build step 6.")
-                Tab.VAULT -> PlaceholderCard("The Vault arrives in build step 5.")
-                Tab.SLEEP -> SleepEnginePreview()
+                Tab.VAULT -> VaultRoute(viewModel(factory = vaultFactory))
+                Tab.BREW -> PlaceholderTab("Brew") { PlaceholderCard("Brew Bar arrives in build step 6.") }
+                Tab.SLEEP -> PlaceholderTab("Sleep") { SleepEnginePreview() }
             }
         }
+    }
+}
+
+@Composable
+private fun PlaceholderTab(title: String, content: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        BrandHeader(title)
+        content()
     }
 }
 
@@ -111,7 +114,7 @@ private fun SleepEnginePreview() {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("BEDTIME LIMIT BY HALF-LIFE", color = GrindhausColors.Muted, fontSize = 11.sp, letterSpacing = 1.5.sp)
+        SectionLabel("Bedtime limit by half-life")
         listOf(4.0, 5.0, 7.0).forEach { h ->
             val mg = CaffeineModel.derivedThresholdMg(h)
             Text(

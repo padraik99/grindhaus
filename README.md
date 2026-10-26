@@ -2,7 +2,7 @@
 
 A personal Android app for a Pixel 8 Pro: it remembers how each bean was dialed in, logs every brew with a taste rating, and estimates how much caffeine will still be in the body at bedtime. Everything stays on the phone.
 
-**Status:** build step 4 of 10. Three tabs, the caffeine engine with sourced estimates for every brew method and tea, and the first database table. The full spec lives in the "Grindhaus Spec v2" doc.
+**Status:** build step 5 of 10. The Vault works: add, edit, search and archive beans, with label photos and a freshness badge. Brew and Sleep tabs are placeholders; the caffeine engine behind them is built and tested. The full spec lives in the "Grindhaus Spec v2" doc.
 
 ## Getting the app onto the phone
 
@@ -19,18 +19,21 @@ Every build is signed with the same committed debug key, so new builds install o
 - Caffeine estimates: each brew method's figure is pinned by a test to the study it came from; species scaling (robusta, decaf, blends, not sure); tea per mug.
 - Sleep planner: latest time a drink still fits, e.g. after a 9:00 double, black tea until about 3:15 pm.
 - Bedtime clock: after-midnight bedtimes and daylight-saving changes.
-- Database: beans are archived, never deleted.
+- Database: beans are archived, never deleted; search; the opening date is recorded once.
+- Freshness: days since roast when the bag has a roast date, otherwise days since opening; past best-by is flagged.
+- Vault screens: adding a bean, opening it, archiving it, all driven on a simulated phone.
+- Label photos: shrinking to 1600 px, turning sideways shots upright, cleanup of cancelled captures.
 - Screens rendered on a simulated phone and saved as screenshots (the `screenshots` artifact on each run).
 
-Not checked until it runs on the phone: camera, vibration, the home-screen widget, and how it feels in the hand.
+Not checked until it runs on the phone: the camera app itself, the date picker's feel, vibration, the home-screen widget, and how it feels in the hand.
 
 ## Project layout
 
 ```
 app/src/main/java/com/padraik99/grindhaus/
   domain/   caffeine engine and bedtime clock (pure Kotlin, no Android)
-  data/     Room database: beans
-  ui/       Compose screens and theme
+  data/     Room database (beans) and label photo storage
+  ui/       Compose screens: vault/, shared components/, theme/
 app/src/test/   unit, database and screenshot tests
 app/schemas/    exported database schema, one file per version
 ```
