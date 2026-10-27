@@ -186,15 +186,32 @@ class BrewViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     fun acceptSuggestion() {
+        val grind = state.value.spec?.suggestion?.grind ?: return
+        updateRecipe { it.copy(grindSetting = grind) }
+    }
+
+    /** One click of the dial, finer (negative) or coarser, kept within the dial's ends. */
+    fun stepGrind(steps: Int) {
         val spec = state.value.spec ?: return
-        val grind = spec.suggestion?.grind ?: return
+        val g = spec.grind ?: return
+        val next = (g + steps * spec.grinder.step).coerceIn(spec.grinder.minSetting, spec.grinder.maxSetting)
+        if (next != g) updateRecipe { it.copy(grindSetting = next) }
+    }
+
+    fun setDose(grams: Double) = updateRecipe { it.copy(doseG = grams) }
+
+    fun setOut(grams: Double) = updateRecipe { it.copy(outG = grams) }
+
+    /** The card shows the remembered recipe; changing it there saves it for this bean, method and basket. */
+    private fun updateRecipe(change: (DialPreset) -> DialPreset) {
+        val spec = state.value.spec ?: return
         viewModelScope.launch {
-            val preset = brewDao.preset(spec.bean.id, spec.method.method, spec.grinder.id, spec.filter)
+            val current = brewDao.preset(spec.bean.id, spec.method.method, spec.grinder.id, spec.filter)
                 ?: DialPreset(
                     beanId = spec.bean.id, method = spec.method.method, grinderId = spec.grinder.id, filter = spec.filter,
                     grindSetting = spec.grind, doseG = spec.doseG, outG = spec.outG, updatedAt = clock.millis(),
                 )
-            repo.setPresetGrind(preset, grind)
+            repo.savePreset(change(current))
         }
     }
 

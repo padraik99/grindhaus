@@ -78,6 +78,15 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
 import java.time.LocalDate
 import java.util.Locale
 
@@ -162,9 +171,15 @@ fun BrewRoute(viewModel: BrewViewModel, today: LocalDate, onAddBean: () -> Unit)
                 },
                 onEditLast = { editingLast = true },
                 onAddBean = onAddBean,
+                onStepGrind = viewModel::stepGrind,
+                onSetDose = viewModel::setDose,
+                onSetOut = viewModel::setOut,
             )
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp)) { data ->
+        SnackbarHost(
+            snackbar,
+            Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 84.dp),
+        ) { data ->
             Snackbar(
                 modifier = Modifier.border(1.dp, GrindhausColors.Crema.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
                 shape = RoundedCornerShape(14.dp),
@@ -199,105 +214,140 @@ fun BrewBar(
     onLog: () -> Unit,
     onEditLast: () -> Unit,
     onAddBean: () -> Unit,
+    onStepGrind: (Int) -> Unit = {},
+    onSetDose: (Double) -> Unit = {},
+    onSetOut: (Double) -> Unit = {},
 ) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Header(state.inYouNowMg, onTea)
-        Text(
-            "Brew",
-            color = GrindhausColors.Foam,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 20.dp),
-        )
-        val spec = state.spec
-        if (state.loaded && state.beans.isEmpty()) {
-            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Add a bag to the Vault and it shows up here, ready to dial in.", color = GrindhausColors.Muted, fontSize = 15.sp)
-                OutlinedButton(onClick = onAddBean) { Text("Go to the Vault", color = GrindhausColors.FoamDim) }
-            }
-            return@Column
-        }
-        if (spec == null) return@Column
-
-        LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(state.beans, key = { it.id }) { bean ->
-                BeanChip(bean, today, selected = bean.id == spec.bean.id) { onSelectBean(bean.id) }
-            }
-        }
-
-        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(
-                Modifier.fillMaxWidth().background(GrindhausColors.Surface, RoundedCornerShape(50)).padding(4.dp),
-            ) {
-                state.methods.forEach { m ->
-                    val selected = m.method == state.selectedMethod
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (selected) GrindhausColors.Foam else GrindhausColors.Surface)
-                            .semantics { role = Role.Tab; this.selected = selected }
-                            .clickable { onSelectMethod(m.method) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            m.label,
-                            color = if (selected) GrindhausColors.Roast else GrindhausColors.FoamDim,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            fontSize = 15.sp,
-                        )
-                    }
-                }
-            }
-            if (spec.method.filters.size > 1) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (spec.method.timesShot) "Basket" else "Filter", color = GrindhausColors.Muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    spec.method.filters.forEach { f ->
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(
-                            selected = f == spec.filter,
-                            onClick = { onSelectFilter(f) },
-                            label = { Text(f.label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = GrindhausColors.Foam,
-                                selectedLabelColor = GrindhausColors.Roast,
-                                labelColor = GrindhausColors.FoamDim,
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-
-        SpecCard(spec, timer, state.autoApplyGrind, onAcceptSuggestion, onAutoApply, onEditLast)
-
-        spec.warning?.let { w ->
+    val spec = state.spec
+    // Which number on the card is being typed into: "dose", "out" or none.
+    var editingNumber by rememberSaveable { mutableStateOf<String?>(null) }
+    // imePadding: the keyboard pushes the card and the pinned button up instead of covering them.
+    Column(Modifier.fillMaxSize().imePadding()) {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Header(state.inYouNowMg, onTea)
             Text(
-                String.format(
-                    Locale.US,
-                    "This brew leaves about %.0f mg in you after %s. Your limit is %.0f mg.",
-                    w.peakMg, w.bedtime, w.limitMg,
-                ),
+                "Brew",
                 color = GrindhausColors.Foam,
-                fontSize = 13.sp,
-                modifier = Modifier
-                    .padding(horizontal = 20.dp)
-                    .fillMaxWidth()
-                    .border(1.dp, GrindhausColors.Crema, RoundedCornerShape(14.dp))
-                    .padding(12.dp),
+                fontSize = 30.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
+            if (state.loaded && state.beans.isEmpty()) {
+                Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Add a bag to the Vault and it shows up here, ready to dial in.", color = GrindhausColors.Muted, fontSize = 15.sp)
+                    OutlinedButton(onClick = onAddBean) { Text("Go to the Vault", color = GrindhausColors.FoamDim) }
+                }
+                return@Column
+            }
+            if (spec == null) return@Column
+
+            LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(state.beans, key = { it.id }) { bean ->
+                    BeanChip(bean, today, selected = bean.id == spec.bean.id) { onSelectBean(bean.id) }
+                }
+            }
+
+            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().background(GrindhausColors.Surface, RoundedCornerShape(50)).padding(4.dp),
+                ) {
+                    state.methods.forEach { m ->
+                        val selected = m.method == state.selectedMethod
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(if (selected) GrindhausColors.Foam else GrindhausColors.Surface)
+                                .semantics { role = Role.Tab; this.selected = selected }
+                                .clickable { onSelectMethod(m.method) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                m.label,
+                                color = if (selected) GrindhausColors.Roast else GrindhausColors.FoamDim,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                fontSize = 15.sp,
+                            )
+                        }
+                    }
+                }
+                if (spec.method.filters.size > 1) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (spec.method.timesShot) "Basket" else "Filter", color = GrindhausColors.Muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        spec.method.filters.forEach { f ->
+                            Spacer(Modifier.width(6.dp))
+                            FilterChip(
+                                selected = f == spec.filter,
+                                onClick = { onSelectFilter(f) },
+                                label = { Text(f.label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = GrindhausColors.Foam,
+                                    selectedLabelColor = GrindhausColors.Roast,
+                                    labelColor = GrindhausColors.FoamDim,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+
+            NextShotCard(
+                spec = spec,
+                timer = timer,
+                autoApply = state.autoApplyGrind,
+                onAccept = onAcceptSuggestion,
+                onAutoApply = onAutoApply,
+                onStepGrind = onStepGrind,
+                editing = editingNumber,
+                onEdit = { editingNumber = it },
+                onSaveNumber = { which, grams ->
+                    if (which == "dose") onSetDose(grams) else onSetOut(grams)
+                    editingNumber = null
+                },
+            )
+
+            spec.warning?.let { w ->
+                Text(
+                    String.format(
+                        Locale.US,
+                        "This shot would leave about %.0f mg in you after %s. Your limit is %.0f mg.",
+                        w.peakMg, w.bedtime, w.limitMg,
+                    ),
+                    color = GrindhausColors.Foam,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth()
+                        .border(1.dp, GrindhausColors.Crema, RoundedCornerShape(14.dp))
+                        .padding(12.dp),
+                )
+            }
+
+            spec.lastLog?.let { LastBrewCard(it, spec.method.timesShot, onEditLast) }
         }
 
-        Button(
-            onClick = onLog,
-            modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = GrindhausColors.Crema, contentColor = GrindhausColors.Roast),
-        ) { Text("Log brew", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        // Pinned below the scrolling part, so it's always in reach, never covers anything,
+        // and never reads as part of the last brew.
+        if (spec != null) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(GrindhausColors.Line))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(GrindhausColors.Roast)
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+            ) {
+                Button(
+                    onClick = onLog,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = GrindhausColors.Crema, contentColor = GrindhausColors.Roast),
+                ) { Text("Log this shot", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
     }
 }
 
@@ -368,14 +418,18 @@ private fun BeanChip(bean: Bean, today: LocalDate, selected: Boolean, onClick: (
     }
 }
 
+/** The recipe for the shot you're about to pull. Everything on it can be changed here. */
 @Composable
-private fun SpecCard(
+private fun NextShotCard(
     spec: BrewSpec,
     timer: ShotTimerState,
     autoApply: Boolean,
     onAccept: () -> Unit,
     onAutoApply: (Boolean) -> Unit,
-    onEditLast: () -> Unit,
+    onStepGrind: (Int) -> Unit,
+    editing: String?,
+    onEdit: (String?) -> Unit,
+    onSaveNumber: (String, Double) -> Unit,
 ) {
     Column(
         Modifier
@@ -385,17 +439,25 @@ private fun SpecCard(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionLabel(if (spec.method.timesShot) "Next shot" else "Next brew")
+            Spacer(Modifier.weight(1f))
+            Text(spec.grinder.name, color = GrindhausColors.Muted, fontSize = 12.sp)
+        }
         if (spec.grind != null) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    SectionLabel("Grind")
-                    Text(formatGrind(spec.grind), color = GrindhausColors.Foam, fontSize = 40.sp, fontFamily = FontFamily.Monospace)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(spec.grinder.name, color = GrindhausColors.Muted, fontSize = 12.sp)
-                    spec.grinder.rangeName(spec.grind)?.let {
-                        Text("$it range", color = GrindhausColors.Crema, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StepButton("−", "Finer") { onStepGrind(-1) }
+                Text(
+                    formatGrind(spec.grind),
+                    color = GrindhausColors.Foam,
+                    fontSize = 40.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(horizontal = 14.dp).semantics { contentDescription = "Grind ${formatGrind(spec.grind)}" },
+                )
+                StepButton("+", "Coarser") { onStepGrind(1) }
+                Spacer(Modifier.weight(1f))
+                spec.grinder.rangeName(spec.grind)?.let {
+                    Text("$it range", color = GrindhausColors.Crema, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             DialBar(spec.grinder, spec.grind)
@@ -403,10 +465,18 @@ private fun SpecCard(
             Text("Pre-ground: no grind setting", color = GrindhausColors.Muted, fontSize = 14.sp)
         }
 
-        Row {
-            Stat("Dose", "${formatG(spec.doseG)} g", Modifier.weight(1f))
-            Stat(if (spec.method.weighsYield) "Yield" else "Water", "${formatG(spec.outG)} g", Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            EditableStat("Dose", "${formatG(spec.doseG)} g", Modifier.weight(1f), editing == "dose") { onEdit("dose") }
+            EditableStat(
+                if (spec.method.weighsYield) "Yield" else "Water", "${formatG(spec.outG)} g", Modifier.weight(1f), editing == "out",
+            ) { onEdit("out") }
             Stat("Ratio", String.format(Locale.US, "1:%s", formatRatio(spec.ratio)), Modifier.weight(1f))
+        }
+        when (editing) {
+            "dose" -> InlineNumberEditor("Dose (g)", spec.doseG, onCancel = { onEdit(null) }) { onSaveNumber("dose", it) }
+            "out" -> InlineNumberEditor(
+                if (spec.method.weighsYield) "Yield (g)" else "Water (g)", spec.outG, onCancel = { onEdit(null) },
+            ) { onSaveNumber("out", it) }
         }
         Row {
             spec.method.targetTimeS?.let {
@@ -420,47 +490,112 @@ private fun SpecCard(
         }
         if (spec.method.timesShot) ShotTimer(timer, spec.method.targetTimeS)
 
-        spec.lastLog?.let { last ->
-            Column(
-                Modifier.fillMaxWidth().padding(top = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(GrindhausColors.Line))
-                Row(
-                    Modifier.fillMaxWidth().clickable(onClickLabel = "Edit last brew", onClick = onEditLast),
-                    verticalAlignment = Alignment.CenterVertically,
+        val last = spec.lastLog
+        var dismissedFor by rememberSaveable { mutableLongStateOf(-1L) }
+        if (last != null) {
+            spec.suggestion?.takeIf { dismissedFor != last.id }?.let { s ->
+                Column(
+                    Modifier.fillMaxWidth().background(GrindhausColors.SurfaceHigh, RoundedCornerShape(14.dp)).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SectionLabel("Last brew")
-                        LastBrewLine(last, spec.method.timesShot)
-                    }
-                    Text("Edit", color = GrindhausColors.Crema, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
-                }
-                var dismissedFor by rememberSaveable { mutableLongStateOf(-1L) }
-                spec.suggestion?.takeIf { dismissedFor != last.id }?.let { s ->
-                    Column(
-                        Modifier.fillMaxWidth().background(GrindhausColors.SurfaceHigh, RoundedCornerShape(14.dp)).padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(s.reason, color = GrindhausColors.FoamDim, fontSize = 13.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = onAccept) { Text("Use ${formatGrind(s.grind)}", color = GrindhausColors.Crema) }
-                            OutlinedButton(onClick = { dismissedFor = last.id }) {
-                                Text("Keep ${formatGrind(last.grindSetting ?: 0.0)}", color = GrindhausColors.FoamDim)
-                            }
+                    Text(s.reason, color = GrindhausColors.FoamDim, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onAccept) { Text("Use ${formatGrind(s.grind)}", color = GrindhausColors.Crema) }
+                        OutlinedButton(onClick = { dismissedFor = last.id }) {
+                            Text("Keep ${formatGrind(last.grindSetting ?: 0.0)}", color = GrindhausColors.FoamDim)
                         }
-                        AutoApplyRow(autoApply, onAutoApply)
                     }
-                }
-                spec.autoMovedFrom?.let { from ->
-                    Text(
-                        "Moved from ${formatGrind(from)} to ${formatGrind(spec.grind ?: from)} after a ${last.taste?.label?.lowercase()} result.",
-                        color = GrindhausColors.Muted,
-                        fontSize = 12.sp,
-                    )
+                    AutoApplyRow(autoApply, onAutoApply)
                 }
             }
+            spec.autoMovedFrom?.let { from ->
+                Text(
+                    "Last shot was at ${formatGrind(from)} and ran ${last.taste?.label?.lowercase()}.",
+                    color = GrindhausColors.Muted,
+                    fontSize = 12.sp,
+                )
+            }
         }
+    }
+}
+
+/** What happened last time. Plainly history: tap it to correct or delete it. */
+@Composable
+private fun LastBrewCard(last: BrewLog, timesShot: Boolean, onEdit: () -> Unit) {
+    Column(
+        Modifier
+            .padding(horizontal = 20.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(1.dp, GrindhausColors.Line, RoundedCornerShape(16.dp))
+            .clickable(onClickLabel = "Edit last brew", onClick = onEdit)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionLabel("Last brew")
+            Spacer(Modifier.weight(1f))
+            Text("Edit", color = GrindhausColors.Crema, fontSize = 13.sp)
+        }
+        LastBrewLine(last, timesShot)
+        if (last.notes.isNotBlank()) Text(last.notes, color = GrindhausColors.FoamDim, fontSize = 13.sp, maxLines = 2)
+    }
+}
+
+@Composable
+private fun StepButton(symbol: String, description: String, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(0.dp),
+        modifier = Modifier.size(44.dp).semantics { contentDescription = description },
+    ) { Text(symbol, fontSize = 20.sp, color = GrindhausColors.Foam) }
+}
+
+/** A number on the card that opens a small editor when tapped; the pill says "you can change this". */
+@Composable
+private fun EditableStat(label: String, value: String, modifier: Modifier, selected: Boolean, onClick: () -> Unit) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClickLabel = "Change ${label.lowercase()}", onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        SectionLabel(label)
+        Text(
+            value,
+            color = GrindhausColors.Foam,
+            fontSize = 22.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .background(GrindhausColors.SurfaceHigh, RoundedCornerShape(10.dp))
+                .border(1.dp, if (selected) GrindhausColors.Crema else GrindhausColors.SurfaceHigh, RoundedCornerShape(10.dp))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
+    }
+}
+
+/** Types a new dose or yield right on the card. The keyboard opens straight away; Done saves. */
+@Composable
+private fun InlineNumberEditor(label: String, current: Double, onCancel: () -> Unit, onSave: (Double) -> Unit) {
+    var text by rememberSaveable(label) { mutableStateOf(formatG(current)) }
+    val value = text.toDoubleOrNull()?.takeIf { it > 0 && it < 2_000 }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(label) { focus.requestFocus() }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(
+            value = text,
+            onValueChange = { v ->
+                val cleaned = v.filter { it.isDigit() || it == '.' }
+                if (cleaned.count { it == '.' } <= 1 && cleaned.length <= 6) text = cleaned
+            },
+            label = { Text(label) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { value?.let(onSave) }),
+            modifier = Modifier.weight(1f).focusRequester(focus),
+        )
+        TextButton(onClick = onCancel) { Text("Cancel", color = GrindhausColors.Muted) }
+        TextButton(onClick = { value?.let(onSave) }, enabled = value != null) { Text("Set", color = GrindhausColors.Crema) }
     }
 }
 
@@ -488,6 +623,7 @@ fun LastBrewLine(log: BrewLog, timesShot: Boolean) {
             append(if (log.weighed) "${formatG(log.doseG)} → ${formatG(log.outG)} g" else "${formatG(log.doseG)} → ~${formatG(log.outG)} g")
             if (timesShot && log.shotTimeS != null) append(" · ${log.shotTimeS} s")
         }
+        log.grindSetting?.let { Text("Grind ${formatGrind(it)}", color = GrindhausColors.Muted, fontSize = 13.sp) }
         Text(shot, color = GrindhausColors.Foam, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
         if (!log.weighed) Text("not weighed", color = GrindhausColors.Muted, fontSize = 12.sp)
         log.rating?.let { Stars(it) }
@@ -554,8 +690,9 @@ private fun DialBar(grinder: Grinder, setting: Double) {
             }
         }
         // Each printed range name sits under the middle of its own stretch of the dial.
-        BoxWithConstraints(Modifier.fillMaxWidth().height(20.dp).padding(top = 4.dp)) {
-            val labelWidth = 50.dp
+        // No fixed height: the row grows with the phone's text size instead of clipping.
+        BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            val labelWidth = 64.dp
             var from = grinder.minSetting
             grinder.labels.forEach { (end, name) ->
                 val mid = (from + end) / 2

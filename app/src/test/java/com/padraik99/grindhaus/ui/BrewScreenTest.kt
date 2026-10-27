@@ -3,6 +3,7 @@ package com.padraik99.grindhaus.ui
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -98,8 +99,8 @@ class BrewScreenTest {
     @Test
     fun aSourShotOffersOneStepFinerAndUsingItMovesTheGrind() {
         start("09:00", listOf(guji))
-        waitForText("Log brew")
-        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Log this shot")
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
         waitForText("Yield (g)")
         compose.onNode(hasContentDescription("Coarser")).performClick() // 3 -> 4
         compose.onNodeWithText("Yield (g)").performTextReplacement("37")
@@ -132,15 +133,15 @@ class BrewScreenTest {
     @Test
     fun anEveningShotWarnsAboutBedtime() {
         start("21:00", listOf(guji))
-        waitForText("This brew leaves about", substring = true)
+        waitForText("This shot would leave about", substring = true)
         compose.onRoot().captureRoboImage("screenshots/brew_bar_warning.png")
     }
 
     @Test
     fun aMorningShotDoesNotWarn() {
         start("09:00", listOf(guji))
-        waitForText("Log brew")
-        assertEquals(0, compose.onAllNodes(hasText("This brew leaves about", substring = true)).fetchSemanticsNodes().size)
+        waitForText("Log this shot")
+        assertEquals(0, compose.onAllNodes(hasText("This shot would leave about", substring = true)).fetchSemanticsNodes().size)
     }
 
     @Test
@@ -160,8 +161,8 @@ class BrewScreenTest {
     @Test
     fun undoingTeaNeverTouchesABrew() {
         start("09:00", listOf(guji))
-        waitForText("Log brew")
-        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Log this shot")
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
         waitForText("Yield (g)")
         compose.onNodeWithText("Save").performScrollTo().performClick()
         waitForText("LAST BREW")
@@ -173,8 +174,8 @@ class BrewScreenTest {
     @Test
     fun theBeanPageShowsDialHistoryAfterABrew() {
         start("09:00", listOf(guji))
-        waitForText("Log brew")
-        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Log this shot")
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
         waitForText("Yield (g)")
         compose.onNode(hasContentDescription("Rate 4 of 5")).performClick()
         compose.onNodeWithText("Balanced").performClick()
@@ -192,8 +193,8 @@ class BrewScreenTest {
     @Test
     fun aShotLeftUnweighedIsMarkedAndCanBeCorrectedLater() {
         start("09:00", listOf(guji))
-        waitForText("Log brew")
-        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Log this shot")
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
         waitForText("Left blank, this brew is marked not weighed", substring = true)
         compose.onNode(hasContentDescription("Rate 3 of 5")).performClick()
         compose.onNodeWithText("Save").performScrollTo().performClick()
@@ -222,8 +223,8 @@ class BrewScreenTest {
     @Test
     fun deletingTheLastBrewFromItsEditorTakesItOff() {
         start("09:00", listOf(guji))
-        waitForText("Log brew")
-        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        waitForText("Log this shot")
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
         waitForText("Yield (g)")
         compose.onNodeWithText("Save").performScrollTo().performClick()
         waitForText("LAST BREW")
@@ -252,7 +253,7 @@ class BrewScreenTest {
         compose.mainClock.autoAdvance = true
         waitForText("Reset")
 
-        compose.onNode(hasText("Log brew") and hasClickAction()).performClick()
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
         waitForText("Time (s)")
         compose.onNode(hasText("Time (s)") and hasText("27")).assertExists()
         compose.onNodeWithText("Save").performScrollTo().performClick()
@@ -260,5 +261,61 @@ class BrewScreenTest {
         waitForText("18 → ~36 g · 27 s")
         // Logging clears the timer for the next shot.
         waitForText("Start timer")
+    }
+
+    @Test
+    fun theNextShotCanBeChangedRightOnTheCard() {
+        start("09:00", listOf(guji))
+        waitForText("Log this shot")
+        compose.onNode(hasContentDescription("Coarser")).performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasContentDescription("Grind 4")).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.onNode(hasText("18 g") and hasClickAction()).performScrollTo().performClick()
+        waitForText("Dose (g)")
+        compose.onNode(hasSetTextAction()).performTextReplacement("11")
+        compose.onRoot().captureRoboImage("screenshots/brew_next_shot_typing.png")
+        compose.onNodeWithText("Set").performClick()
+        waitForText("11 g")
+        compose.onNodeWithText("1:3.3").assertExists()
+        compose.onRoot().captureRoboImage("screenshots/brew_next_shot_changed.png")
+
+        val preset = runBlocking {
+            graph.db.brewDao().preset(1, BrewMethod.ESPRESSO, graph.brewRepository.defaultGrinder().id, FilterOption.SINGLE_WALL)
+        }!!
+        assertEquals(4.0, preset.grindSetting!!, 0.0)
+        assertEquals(11.0, preset.doseG, 0.0)
+
+        // The log screen starts from the card.
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
+        waitForText("Yield (g)")
+        compose.onNode(hasText("Dose (g)") and hasText("11")).assertExists()
+    }
+
+    @Test
+    fun fixingTheLastShotsYieldFixesTheNextShotToo() {
+        // What happened on the phone: logged with the yield blank, then corrected it to 31 g.
+        start("09:00", listOf(guji))
+        waitForText("Log this shot")
+        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
+        waitForText("Yield (g)")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        waitForText("not weighed")
+
+        compose.onNode(hasText("Edit") and hasClickAction()).performScrollTo().performClick()
+        waitForText("Edit brew")
+        compose.onNodeWithText("Yield (g)").performTextReplacement("31")
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+
+        waitForText("18 → 31 g")
+        compose.onNode(hasText("31 g") and hasClickAction()).assertExists()
+        compose.onNodeWithText("1:1.7").assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "w412dp-h915dp-xxhdpi", fontScale = 1.3f)
+    fun largerTextStillFitsTheDial() {
+        start("09:00", listOf(guji))
+        waitForText("Espresso range")
+        compose.onRoot().captureRoboImage("screenshots/brew_bar_large_text.png")
     }
 }

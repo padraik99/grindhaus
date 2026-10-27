@@ -53,9 +53,15 @@ interface BrewDao {
 
     @Query(
         "SELECT * FROM brew_logs WHERE bean_id = :beanId AND method = :method " +
-            "AND grinder_id = :grinderId AND filter = :filter ORDER BY brewed_at DESC LIMIT 1",
+            "AND grinder_id = :grinderId AND filter = :filter ORDER BY brewed_at DESC, id DESC LIMIT 1",
     )
     fun observeLastLog(beanId: Long, method: BrewMethod, grinderId: Long, filter: FilterOption): Flow<BrewLog?>
+
+    @Query(
+        "SELECT * FROM brew_logs WHERE bean_id = :beanId AND method = :method " +
+            "AND grinder_id = :grinderId AND filter = :filter ORDER BY brewed_at DESC, id DESC LIMIT 1",
+    )
+    suspend fun lastLog(beanId: Long, method: BrewMethod, grinderId: Long, filter: FilterOption): BrewLog?
 
     @Query("SELECT * FROM brew_logs WHERE bean_id = :beanId ORDER BY brewed_at DESC")
     fun observeLogsForBean(beanId: Long): Flow<List<BrewLog>>

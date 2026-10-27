@@ -124,6 +124,39 @@ class BrewRepositoryTest {
     }
 
     @Test
+    fun correctingTheLatestBrewCarriesItsDoseAndYieldIntoTheNextShot() = runBlocking {
+        val bean = newBean()
+        val g = repo.defaultGrinder()
+        // Sour at 4 with auto-apply on: the next shot was moved to 3.
+        val id = repo.logBrew(shot(bean, g, 4.0, Taste.SOUR).copy(weighed = false), bean, g, autoApplyGrind = true)
+        val logged = graph.db.brewDao().log(id)!!
+
+        repo.updateBrew(logged.copy(doseG = 11.0, outG = 31.0, weighed = true), bean)
+        val preset = graph.db.brewDao().preset(bean.id, BrewMethod.ESPRESSO, g.id, FilterOption.SINGLE_WALL)!!
+        assertEquals(11.0, preset.doseG, 0.0)
+        assertEquals(31.0, preset.outG, 0.0)
+        // The grind suggestion already taken is kept, because the grind itself wasn't corrected.
+        assertEquals(3.0, preset.grindSetting!!, 0.0)
+
+        // Correcting the grind (it was really 5) does move the next shot's grind.
+        repo.updateBrew(graph.db.brewDao().log(id)!!.copy(grindSetting = 5.0), bean)
+        assertEquals(5.0, graph.db.brewDao().preset(bean.id, BrewMethod.ESPRESSO, g.id, FilterOption.SINGLE_WALL)!!.grindSetting!!, 0.0)
+    }
+
+    @Test
+    fun correctingAnOlderBrewLeavesTheNextShotAlone() = runBlocking {
+        val bean = newBean()
+        val g = repo.defaultGrinder()
+        val older = repo.logBrew(shot(bean, g, 4.0, Taste.BALANCED), bean, g, autoApplyGrind = false)
+        repo.logBrew(shot(bean, g, 3.0, Taste.BALANCED, yield = 38.0), bean, g, autoApplyGrind = false)
+
+        repo.updateBrew(graph.db.brewDao().log(older)!!.copy(outG = 30.0, grindSetting = 6.0), bean)
+        val preset = graph.db.brewDao().preset(bean.id, BrewMethod.ESPRESSO, g.id, FilterOption.SINGLE_WALL)!!
+        assertEquals(38.0, preset.outG, 0.0)
+        assertEquals(3.0, preset.grindSetting!!, 0.0)
+    }
+
+    @Test
     fun anUnweighedBrewIsKeptAndCountedAtThePlannedYield() = runBlocking {
         val bean = newBean()
         val g = repo.defaultGrinder()

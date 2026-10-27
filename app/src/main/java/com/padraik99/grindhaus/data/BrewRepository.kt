@@ -64,13 +64,32 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
 
     /**
      * Saves corrections to a brew. Caffeine is recalculated from the corrected dose and
-     * yield, and today's intake follows. The dial-in memory for next time is left alone.
+     * yield, and today's intake follows. If it's the most recent brew of its kind, the
+     * recipe for the next shot follows too: its dose and yield, and its grind only when the
+     * grind itself was corrected (so a grind suggestion already taken isn't undone).
      */
     suspend fun updateBrew(log: BrewLog, bean: Bean) = db.withTransaction {
+        val before = brews.log(log.id)
         val corrected = log.copy(caffeineMg = caffeineMg(bean, log.method, log.doseG, log.outG))
         brews.updateLog(corrected)
         brews.updateIntakeForLog(corrected.id, corrected.caffeineMg, corrected.brewedAt)
+
+        val latest = brews.lastLog(log.beanId, log.method, log.grinderId, log.filter)
+        if (latest?.id == log.id) {
+            val preset = brews.preset(log.beanId, log.method, log.grinderId, log.filter)
+            val grindCorrected = before != null && before.grindSetting != log.grindSetting
+            brews.savePreset(
+                DialPreset(
+                    beanId = log.beanId, method = log.method, grinderId = log.grinderId, filter = log.filter,
+                    grindSetting = if (grindCorrected || preset == null) log.grindSetting else preset.grindSetting,
+                    doseG = log.doseG, outG = log.outG, updatedAt = clock.millis(),
+                ),
+            )
+        }
     }
+
+    /** Changes to the next shot's recipe, made on the Brew card. */
+    suspend fun savePreset(preset: DialPreset) = brews.savePreset(preset.copy(updatedAt = clock.millis()))
 
     /** Takes back a brew logged by mistake, along with its caffeine. */
     suspend fun deleteBrew(log: BrewLog) = db.withTransaction {
@@ -113,8 +132,4 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
             label = "${type.name.lowercase().replaceFirstChar { it.uppercase() }} tea",
         ),
     )
-
-    /** Applies a grind suggestion the user accepted, keeping the rest of the preset. */
-    suspend fun setPresetGrind(preset: DialPreset, grind: Double) =
-        brews.savePreset(preset.copy(grindSetting = grind, updatedAt = clock.millis()))
 }
