@@ -1,6 +1,6 @@
 package com.padraik99.grindhaus.ui.brew
 
-import com.padraik99.grindhaus.ui.components.grindhausTimeColors
+import com.padraik99.grindhaus.ui.components.TimeOfDayField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -24,14 +24,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimeInput
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -76,7 +73,6 @@ fun BrewLog.plannedOutG(): Double = if (weighed) doseG * Methods.spec(method).ra
  * is recalculated and moved to the corrected time, so there's never a reason to delete and
  * log it again.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditBrewScreen(
     log: BrewLog,
@@ -103,7 +99,7 @@ fun EditBrewScreen(
     var taste by rememberSaveable { mutableStateOf(log.taste) }
     var notes by rememberSaveable { mutableStateOf(log.notes) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    val timeState = rememberTimePickerState(initialHour = brewed.hour, initialMinute = brewed.minute, is24Hour = false)
+    var drankTime by rememberSaveable { mutableStateOf(brewed.toLocalTime().withSecond(0).withNano(0)) }
 
     // The bag this brew belongs to stays a choice even if it's been finished since.
     val beanChoices = (choices + listOfNotNull(allBeans.firstOrNull { it.id == bean.id } ?: bean)).distinctBy { it.id }
@@ -115,7 +111,7 @@ fun EditBrewScreen(
 
     val doseValue = dose.toDoubleOrNull()?.takeIf { it > 0 }
     val outValue = out.toDoubleOrNull()?.takeIf { it > 0 }
-    val at = LocalDate.ofEpochDay(day).atTime(LocalTime.of(timeState.hour, timeState.minute)).atZone(zone).toInstant()
+    val at = LocalDate.ofEpochDay(day).atTime(drankTime).atZone(zone).toInstant()
     val newMg = doseValue?.let { caffeine(newBean, method, it, outValue ?: planned) }
 
     if (confirmDelete) {
@@ -178,7 +174,7 @@ fun EditBrewScreen(
                         }
                     }
                 }
-                TimeInput(state = timeState, colors = grindhausTimeColors())
+                TimeOfDayField(drankTime, { drankTime = it })
                 Text(
                     "Logged at ${clockTime(Instant.ofEpochMilli(log.brewedAt), zone)}. Set when you actually drank it; caffeine counts from then.",
                     color = GrindhausColors.Muted,

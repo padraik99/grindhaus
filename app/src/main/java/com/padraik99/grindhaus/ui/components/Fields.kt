@@ -1,9 +1,13 @@
 package com.padraik99.grindhaus.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.TimePickerDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import java.util.Locale
+import java.time.LocalTime
+import androidx.compose.ui.Alignment
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -110,17 +114,38 @@ fun Choice(text: String, selected: Boolean, modifier: Modifier = Modifier, onCli
     )
 }
 
-/** The time picker in the app's colours rather than Android's default purple. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * A time of day, compact: hour and minute fields (tap selects, type replaces) and am / pm.
+ * [onChange] fires only with a valid time; a half-typed hour is left alone until it is one.
+ */
 @Composable
-fun grindhausTimeColors() = TimePickerDefaults.colors(
-    timeSelectorSelectedContainerColor = GrindhausColors.SurfaceHigh,
-    timeSelectorUnselectedContainerColor = GrindhausColors.Inset,
-    timeSelectorSelectedContentColor = GrindhausColors.Crema,
-    timeSelectorUnselectedContentColor = GrindhausColors.Foam,
-    periodSelectorBorderColor = GrindhausColors.Outline,
-    periodSelectorSelectedContainerColor = GrindhausColors.SurfaceHigh,
-    periodSelectorUnselectedContainerColor = Color.Transparent,
-    periodSelectorSelectedContentColor = GrindhausColors.Crema,
-    periodSelectorUnselectedContentColor = GrindhausColors.Muted,
-)
+fun TimeOfDayField(time: LocalTime, onChange: (LocalTime) -> Unit, modifier: Modifier = Modifier) {
+    val pm = time.hour >= 12
+    var hourText by rememberSaveable { mutableStateOf(time.toHour12().toString()) }
+    var minuteText by rememberSaveable { mutableStateOf(String.format(Locale.US, "%02d", time.minute)) }
+    fun emit(hour12: Int?, minute: Int?, isPm: Boolean) {
+        if (hour12 == null || hour12 !in 1..12 || minute == null || minute !in 0..59) return
+        onChange(LocalTime.of((hour12 % 12) + if (isPm) 12 else 0, minute))
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NumberField(
+            hourText,
+            { hourText = it; emit(it.toIntOrNull(), minuteText.toIntOrNull(), pm) },
+            "Hour",
+            Modifier.width(88.dp),
+            decimals = false,
+        )
+        Text(":", color = GrindhausColors.FoamDim, fontSize = 22.sp)
+        NumberField(
+            minuteText,
+            { minuteText = it; emit(hourText.toIntOrNull(), it.toIntOrNull(), pm) },
+            "Min",
+            Modifier.width(88.dp),
+            decimals = false,
+        )
+        Choice("am", !pm) { emit(hourText.toIntOrNull(), minuteText.toIntOrNull(), false) }
+        Choice("pm", pm) { emit(hourText.toIntOrNull(), minuteText.toIntOrNull(), true) }
+    }
+}
+
+private fun LocalTime.toHour12(): Int = (hour % 12).let { if (it == 0) 12 else it }

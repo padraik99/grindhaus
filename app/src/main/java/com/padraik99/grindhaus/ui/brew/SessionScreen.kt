@@ -1,6 +1,6 @@
 package com.padraik99.grindhaus.ui.brew
 
-import com.padraik99.grindhaus.ui.components.grindhausTimeColors
+import com.padraik99.grindhaus.ui.components.TimeOfDayField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,15 +27,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimeInput
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,7 +72,6 @@ import java.util.Locale
  * A new brew, top to bottom in the order you make it: what you're brewing, the set-up, the
  * shot itself, how it tasted, and when you drank it. Nothing is saved until Save brew.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(
     state: BrewUiState,
@@ -108,7 +104,7 @@ fun SessionScreen(
     val zone = state.zone
     val nowAt = now()
     val nowLocal = nowAt.atZone(zone)
-    val timeState = rememberTimePickerState(initialHour = nowLocal.hour, initialMinute = nowLocal.minute, is24Hour = false)
+    var pickTime by rememberSaveable { mutableStateOf(nowLocal.toLocalTime().withSecond(0).withNano(0)) }
 
     // The timer's reading drops into Time when it stops.
     LaunchedEffect(timer.running) {
@@ -123,7 +119,7 @@ fun SessionScreen(
     val outForCaffeine = actualOut ?: aimValue ?: spec.outG
     val drankAt: Instant = when (whenMode) {
         "15" -> nowAt.minus(Duration.ofMinutes(15))
-        "pick" -> pickedTime(timeState.hour, timeState.minute, nowAt, zone)
+        "pick" -> pickedTime(pickTime.hour, pickTime.minute, nowAt, zone)
         else -> nowAt
     }
     val mg = doseValue?.let { caffeine(spec.bean, method.method, it, outForCaffeine) }
@@ -331,7 +327,7 @@ fun SessionScreen(
                     Choice("15 min ago", whenMode == "15") { whenMode = "15" }
                     Choice("Pick a time", whenMode == "pick") { whenMode = "pick" }
                 }
-                if (whenMode == "pick") TimeInput(state = timeState, colors = grindhausTimeColors())
+                if (whenMode == "pick") TimeOfDayField(pickTime, { pickTime = it })
                 Text(
                     "Caffeine counts from ${clockTime(drankAt, zone)}, so a brew logged late, or a freddo from the freezer, still adds up right.",
                     color = GrindhausColors.Muted,

@@ -1,5 +1,6 @@
 package com.padraik99.grindhaus.ui
 
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +75,9 @@ fun GrindhausApp(
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // consumeWindowInsets: a screen that makes room for the keyboard then doesn't also
+        // add back the space the tab bar already took (which left a dead band above the keys).
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             when (tab) {
                 Tab.VAULT -> VaultRoute(viewModel(factory = VaultViewModel.factory(graph)))
                 Tab.HOME -> HomeRoute(

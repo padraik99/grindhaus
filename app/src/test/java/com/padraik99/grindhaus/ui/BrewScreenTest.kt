@@ -248,6 +248,37 @@ class BrewScreenTest {
     }
 
     @Test
+    fun aBrewDrunkEarlierCanBeLoggedAtThatTime() {
+        start("09:00", listOf(guji))
+        startBrew("Espresso")
+        compose.onNode(hasText("Pick a time") and hasClickAction()).performScrollTo().performClick()
+        field("Hour").performScrollTo().performTextReplacement("8")
+        field("Min").performTextReplacement("05")
+        compose.onNodeWithText("Caffeine counts from 8:05 am", substring = true).assertExists()
+        compose.onRoot().captureRoboImage("screenshots/session_pick_time.png")
+        save()
+        compose.waitUntil(5_000) { intake().isNotEmpty() }
+        val expected = java.time.LocalDateTime.parse("2026-10-26T08:05").atZone(TestGraph.LA).toInstant().toEpochMilli()
+        assertEquals(expected, intake().single().takenAt)
+    }
+
+    @Test
+    fun anEditCanSetTheTimeTheBrewWasDrunk() {
+        start("09:00", listOf(guji))
+        startBrew("Espresso")
+        save()
+        waitForText("g3 · 18→~36 g")
+        compose.onNode(hasContentDescription("Edit Ethiopia Guji Espresso")).performClick()
+        waitForText("Edit brew")
+        field("Hour").performScrollTo().performTextReplacement("7")
+        field("Min").performTextReplacement("15")
+        compose.onNode(hasText("Save changes") and hasClickAction()).performClick()
+        waitForText("TODAY 7:15 AM")
+        val expected = java.time.LocalDateTime.parse("2026-10-26T07:15").atZone(TestGraph.LA).toInstant().toEpochMilli()
+        assertEquals(expected, intake().single().takenAt)
+    }
+
+    @Test
     fun deletingABrewFromItsEditorTakesItAndItsCaffeineOff() {
         start("09:00", listOf(guji))
         startBrew("Espresso")
