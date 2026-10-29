@@ -10,6 +10,7 @@ import com.padraik99.grindhaus.domain.Comparison
 import com.padraik99.grindhaus.domain.FilterOption
 import com.padraik99.grindhaus.domain.GrindScale
 import com.padraik99.grindhaus.domain.Taste
+import com.padraik99.grindhaus.domain.TeaType
 
 /** A grinder and its dial. A setting means nothing without knowing which grinder. */
 @Entity(tableName = "grinders")
@@ -146,4 +147,14 @@ data class BeanComparison(
     val outcome: Comparison,
     /** Epoch milliseconds. */
     @ColumnInfo(name = "compared_at") val comparedAt: Long,
+)
+
+/** A tea Patrick drinks often, so logging it is one tap. Its type sets the caffeine. */
+@Entity(tableName = "saved_teas")
+data class SavedTea(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val type: TeaType,
+    /** How often it's been logged: the list puts the most-used first. */
+    @ColumnInfo(name = "times_logged", defaultValue = "0") val timesLogged: Int = 0,
 )

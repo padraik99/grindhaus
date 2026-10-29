@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.padraik99.grindhaus.AppGraph
 import com.padraik99.grindhaus.R
-import com.padraik99.grindhaus.ui.brew.BrewRoute
+import com.padraik99.grindhaus.ui.brew.HomeRoute
 import com.padraik99.grindhaus.ui.brew.BrewViewModel
 import androidx.compose.ui.platform.LocalContext
 import java.time.LocalDate
@@ -41,14 +41,14 @@ import com.padraik99.grindhaus.ui.vault.VaultViewModel
 import java.util.Locale
 
 enum class Tab(val label: String, @DrawableRes val icon: Int) {
-    BREW("Brew", R.drawable.ic_nav_brew),
+    HOME("Home", R.drawable.ic_nav_brew),
     VAULT("Vault", R.drawable.ic_nav_vault),
     SLEEP("Sleep", R.drawable.ic_nav_sleep),
 }
 
 @Composable
 fun GrindhausApp(
-    startTab: Tab = Tab.BREW,
+    startTab: Tab = Tab.HOME,
     graph: AppGraph = AppGraph.get(LocalContext.current),
 ) {
     var tab by rememberSaveable { mutableStateOf(startTab) }
@@ -77,7 +77,7 @@ fun GrindhausApp(
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 Tab.VAULT -> VaultRoute(viewModel(factory = VaultViewModel.factory(graph)))
-                Tab.BREW -> BrewRoute(
+                Tab.HOME -> HomeRoute(
                     viewModel = viewModel(factory = BrewViewModel.factory(graph)),
                     today = LocalDate.now(graph.clock),
                     onAddBean = { tab = Tab.VAULT },

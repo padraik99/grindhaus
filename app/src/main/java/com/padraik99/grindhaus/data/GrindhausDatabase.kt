@@ -15,15 +15,20 @@ import androidx.room.RoomDatabase
  * 3. adds brew_logs.weighed (default true), so a shot with no reliable weight can be
  *    logged honestly. Existing brews count as weighed.
  * 4. adds beans.barcode (empty for existing bags), filled when a bag is added by scanning.
+ * 5. adds saved_teas, the teas Patrick drinks often. A new table only.
  */
 @Database(
-    entities = [Bean::class, Grinder::class, DialPreset::class, BrewLog::class, IntakeEvent::class, BeanComparison::class],
-    version = 4,
+    entities = [
+        Bean::class, Grinder::class, DialPreset::class, BrewLog::class, IntakeEvent::class, BeanComparison::class,
+        SavedTea::class,
+    ],
+    version = 5,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5),
     ],
 )
 abstract class GrindhausDatabase : RoomDatabase() {
@@ -31,6 +36,7 @@ abstract class GrindhausDatabase : RoomDatabase() {
     abstract fun beanDao(): BeanDao
     abstract fun grinderDao(): GrinderDao
     abstract fun brewDao(): BrewDao
+    abstract fun teaDao(): TeaDao
 
     companion object {
         const val NAME = "grindhaus.db"

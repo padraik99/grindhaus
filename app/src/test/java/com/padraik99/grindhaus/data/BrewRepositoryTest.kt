@@ -168,6 +168,61 @@ class BrewRepositoryTest {
     }
 
     @Test
+    fun movingABrewToAnotherCoffeeMethodAndTimeMovesItsCaffeine() = runBlocking {
+        val decaf = newBean(Species.DECAF)
+        val guji = newBean()
+        val g = repo.defaultGrinder()
+        val id = repo.logBrew(shot(decaf, g, 3.0, Taste.BALANCED), decaf, g, autoApplyGrind = false)
+        val logged = graph.db.brewDao().log(id)!!
+        val earlier = logged.brewedAt - 3_600_000L
+
+        repo.updateBrew(logged.copy(method = BrewMethod.MOKA, filter = FilterOption.SINGLE_WALL, brewedAt = earlier), guji)
+
+        val moved = graph.db.brewDao().log(id)!!
+        assertEquals(guji.id, moved.beanId)
+        assertEquals(BrewMethod.MOKA, moved.method)
+        // The espresso basket doesn't exist on a moka pot, so the moka's own filter is used.
+        assertEquals(FilterOption.NONE, moved.filter)
+        assertEquals(18 * 11.4, moved.caffeineMg, 0.1)
+        val event = graph.db.brewDao().observeIntakeSince(0).first().single()
+        assertEquals(earlier, event.takenAt)
+        assertEquals(moved.caffeineMg, event.mg, 1e-9)
+        assertEquals("Moka · Guji", event.label)
+        // The Guji's moka recipe now starts from this brew.
+        assertEquals(18.0, graph.db.brewDao().preset(guji.id, BrewMethod.MOKA, g.id, FilterOption.NONE)!!.doseG, 0.0)
+        assertEquals(LocalDate.of(2026, 10, 26).toEpochDay(), graph.db.beanDao().get(guji.id)!!.openedDate)
+    }
+
+    @Test
+    fun aFreddoRemembersItsSettingsUnderTheAeroPress() = runBlocking {
+        val bean = newBean()
+        val g = repo.defaultGrinder()
+        repo.logBrew(
+            shot(bean, g, 18.0, Taste.BALANCED).copy(method = BrewMethod.FREDDO, filter = FilterOption.PAPER, doseG = 15.0, outG = 120.0),
+            bean, g, autoApplyGrind = false,
+        )
+        val preset = graph.db.brewDao().preset(bean.id, BrewMethod.AEROPRESS, g.id, FilterOption.PAPER)!!
+        assertEquals(18.0, preset.grindSetting!!, 0.0)
+        assertEquals(120.0, preset.outG, 0.0)
+    }
+
+    @Test
+    fun savedTeasAreNamedCountedAndForgettable() = runBlocking {
+        val id = repo.saveTea("  Earl Grey ", TeaType.BLACK)
+        val tea = graph.db.teaDao().observeAll().first().single()
+        assertEquals("Earl Grey", tea.name)
+        repo.logTea(TeaType.BLACK, tea)
+        repo.logTea(TeaType.BLACK, tea)
+        assertEquals(2, graph.db.teaDao().observeAll().first().single().timesLogged)
+        assertEquals(listOf("Earl Grey", "Earl Grey"), graph.db.brewDao().observeIntakeSince(0).first().map { it.label })
+
+        repo.removeTea(graph.db.teaDao().observeAll().first().single { it.id == id })
+        assertEquals(0, graph.db.teaDao().observeAll().first().size)
+        // The cups already logged stay.
+        assertEquals(2, graph.db.brewDao().observeIntakeSince(0).first().size)
+    }
+
+    @Test
     fun robustaBeansCountDoubleCaffeine() = runBlocking {
         val bean = newBean(Species.ROBUSTA)
         assertEquals(327.6, repo.caffeineMg(bean, BrewMethod.ESPRESSO, 18.0, 36.0), 0.1)

@@ -227,7 +227,7 @@ class VaultScreenTest {
         compose.onAllNodes(hasText("not weighed", substring = true))[1].performScrollTo().performClick()
 
         waitForText("Edit brew")
-        compose.onNodeWithText("Espresso · Single-wall · Ethiopia Guji").assertExists()
+        compose.onNode(hasText("Ethiopia Guji") and hasClickAction()).assertExists()
         compose.onNodeWithText("Delete this brew").performScrollTo().performClick()
         compose.onNodeWithText("Delete").performClick()
 

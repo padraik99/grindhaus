@@ -1,15 +1,20 @@
 package com.padraik99.grindhaus.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.padraik99.grindhaus.AppGraph
@@ -31,7 +36,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDate
 
-/** Brew Bar end to end on a simulated phone: dial in, log a shot, take the suggestion. */
+/** Home and the brew session end to end on a simulated phone, backed by a real (in-memory) database. */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w412dp-h915dp-xxhdpi")
@@ -48,13 +53,17 @@ class BrewScreenTest {
     private fun start(time: String, beans: List<Bean>) {
         graph = TestGraph.create(TestGraph.clockAt("2026-10-26T$time"))
         runBlocking { beans.forEach { graph.db.beanDao().insert(it) } }
-        compose.setContent { GrindhausTheme { GrindhausApp(startTab = Tab.BREW, graph = graph) } }
+        compose.setContent { GrindhausTheme { GrindhausApp(startTab = Tab.HOME, graph = graph) } }
     }
 
     private val guji = Bean(
         title = "Ethiopia Guji", roaster = "Specialty roaster", species = Species.ARABICA,
         roastLevel = RoastLevel.LIGHT, roastDate = LocalDate.of(2026, 10, 14).toEpochDay(),
         purchaseDate = LocalDate.of(2026, 10, 20).toEpochDay(), bagGrams = 340.0,
+    )
+    private val decaf = Bean(
+        title = "Kicking Horse", roaster = "Kicking Horse", species = Species.DECAF,
+        roastLevel = RoastLevel.DARK, purchaseDate = LocalDate.of(2026, 10, 24).toEpochDay(),
     )
     private val huila = Bean(
         title = "Colombia Huila", roaster = "Supermarket roaster", species = Species.NOT_SURE,
@@ -67,6 +76,28 @@ class BrewScreenTest {
             compose.onAllNodes(hasText(text, substring = substring)).fetchSemanticsNodes().isNotEmpty()
         }
 
+    private fun gone(text: String, substring: Boolean = false) =
+        compose.waitUntil(timeoutMillis = 5_000) {
+            compose.onAllNodes(hasText(text, substring = substring)).fetchSemanticsNodes().isEmpty()
+        }
+
+    /** Taps a method sticker on Home and waits for the brew session. */
+    private fun startBrew(method: String) {
+        waitForText(method)
+        compose.onNode(hasText(method) and hasClickAction()).performScrollTo().performClick()
+        waitForText("New brew")
+    }
+
+    private fun field(label: String) = compose.onNode(hasText(label) and hasSetTextAction())
+
+    private fun save() = compose.onNode(hasText("Save brew") and hasClickAction()).performClick()
+
+    private fun intake() = runBlocking { graph.db.brewDao().observeIntakeSince(0).first() }
+
+    private fun preset(beanId: Long, method: BrewMethod, filter: FilterOption) = runBlocking {
+        graph.db.brewDao().preset(beanId, method, graph.brewRepository.defaultGrinder().id, filter)
+    }
+
     @Test
     fun emptyVaultPointsToTheVault() {
         start("09:00", emptyList())
@@ -76,111 +107,239 @@ class BrewScreenTest {
     }
 
     @Test
-    fun aNewBeanStartsAtTheMethodDefaults() {
+    fun homeShowsTheShelfTheMethodsAndTheVersion() {
+        start("09:00", listOf(guji, decaf))
+        waitForText("ON THE SHELF")
+        compose.onNodeWithText("Freddo").assertExists()
+        compose.onNodeWithText("Your brews show up here once you log one.").assertExists()
+        waitForText("v0.1.", substring = true)
+        compose.onRoot().captureRoboImage("screenshots/home.png")
+    }
+
+    @Test
+    fun aNewBrewStartsAtTheMethodDefaults() {
         start("09:00", listOf(guji))
-        waitForText("Espresso range")
+        startBrew("Espresso")
         compose.onNodeWithText("Caffeine ~164 mg").assertExists()
         compose.onNodeWithText("1:2").assertExists()
-        // The installed version sits under the wordmark, to check an update landed.
-        waitForText("v0.1.", substring = true)
-        compose.onRoot().captureRoboImage("screenshots/brew_bar.png")
+        compose.onNode(hasContentDescription("Grind 3")).assertExists()
+        compose.onRoot().captureRoboImage("screenshots/session.png")
     }
 
     @Test
     fun preGroundBeansSkipTheGrindAndUseTheDoubleWallBasket() {
         start("09:00", listOf(huila))
-        waitForText("Pre-ground: no grind setting")
-        assertEquals(
-            1,
-            compose.onAllNodes(hasText("Double-wall")).fetchSemanticsNodes().size,
-        )
+        startBrew("Espresso")
+        compose.onNodeWithText("Pre-ground: no grind setting").assertExists()
+        compose.onNode(hasText("Double-wall") and SemanticsMatcher.expectValue(SemanticsProperties.Selected, true)).assertExists()
     }
 
     @Test
-    fun aSourShotOffersOneStepFinerAndUsingItMovesTheGrind() {
+    fun typingIntoANumberReplacesIt() {
         start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Yield (g)")
+        startBrew("Espresso")
+        field("Dose").performClick()
+        field("Dose").performTextInput("11")
+        waitForText("1:3.3")
+        assertEquals(1, compose.onAllNodes(hasText("11") and hasSetTextAction()).fetchSemanticsNodes().size)
+    }
+
+    @Test
+    fun aSourShotIsSavedAndTheNextOneOffersOneStepFiner() {
+        start("09:00", listOf(guji))
+        startBrew("Espresso")
         compose.onNode(hasContentDescription("Coarser")).performClick() // 3 -> 4
-        compose.onNodeWithText("Yield (g)").performTextReplacement("37")
-        compose.onNodeWithText("Time (s)").performTextReplacement("22")
-        compose.onNode(hasContentDescription("Rate 2 of 5")).performClick()
-        compose.onNodeWithText("Sour").performClick()
-        compose.onRoot().captureRoboImage("screenshots/brew_log.png")
-        compose.onNodeWithText("Save").performScrollTo().performClick()
+        field("Yield").performScrollTo().performTextReplacement("37")
+        field("Time").performTextReplacement("22")
+        compose.onNode(hasContentDescription("Rate 2 of 5")).performScrollTo().performClick()
+        compose.onNode(hasText("Sour") and hasClickAction()).performScrollTo().performClick()
+        compose.onRoot().captureRoboImage("screenshots/session_sour.png")
+        save()
 
-        waitForText("Ran sour. Try grind 3, one step finer?")
-        compose.onNodeWithText("18 → 37 g · 22 s").assertExists()
-        compose.onRoot().captureRoboImage("screenshots/brew_bar_after_sour.png")
-
-        compose.onNodeWithText("Use 3").performScrollTo().performClick()
-        compose.waitUntil(5_000) {
-            compose.onAllNodes(hasText("Ran sour. Try grind 3, one step finer?")).fetchSemanticsNodes().isEmpty()
-        }
-
-        val preset = runBlocking {
-            val g = graph.brewRepository.defaultGrinder()
-            graph.db.brewDao().preset(1, BrewMethod.ESPRESSO, g.id, FilterOption.SINGLE_WALL)
-        }!!
-        assertEquals(3.0, preset.grindSetting!!, 0.0)
-        assertEquals(37.0, preset.outG, 0.0)
-
+        waitForText("Saved: Ethiopia Guji · espresso")
+        waitForText("g4 · 18→37 g · 22 s")
+        compose.onRoot().captureRoboImage("screenshots/home_after_brew.png")
         // The bag's first brew opened it.
         assertEquals(LocalDate.of(2026, 10, 26).toEpochDay(), runBlocking { graph.db.beanDao().get(1)!!.openedDate })
+
+        compose.onNode(hasContentDescription("Brew Ethiopia Guji Espresso again")).performClick()
+        waitForText("Ran sour. Try grind 3, one step finer?")
+        compose.onNode(hasText("Use 3") and hasClickAction()).performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasContentDescription("Grind 3")).fetchSemanticsNodes().isNotEmpty() }
+        save()
+        compose.waitUntil(5_000) { preset(1, BrewMethod.ESPRESSO, FilterOption.SINGLE_WALL)?.grindSetting == 3.0 }
     }
 
     @Test
     fun anEveningShotWarnsAboutBedtime() {
         start("21:00", listOf(guji))
-        waitForText("This shot would leave about", substring = true)
-        compose.onRoot().captureRoboImage("screenshots/brew_bar_warning.png")
+        startBrew("Espresso")
+        compose.onNodeWithText("This would leave about", substring = true).performScrollTo()
+        compose.onRoot().captureRoboImage("screenshots/session_warning.png")
     }
 
     @Test
-    fun aMorningShotDoesNotWarn() {
+    fun aMorningShotIsFineForTonight() {
         start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        assertEquals(0, compose.onAllNodes(hasText("This shot would leave about", substring = true)).fetchSemanticsNodes().size)
+        startBrew("Espresso")
+        compose.onNodeWithText("Fine for tonight", substring = true).performScrollTo()
     }
 
     @Test
-    fun teaIsLoggedFromTheHeaderWithAConfirmationThatCanUndo() {
+    fun theCoffeeCanBeSwitchedInsideTheBrew() {
+        start("09:00", listOf(guji, decaf))
+        startBrew("Espresso")
+        compose.onNode(hasText("Change") and hasClickAction() and hasText("COFFEE")).performClick()
+        compose.onNode(hasText("Kicking Horse (decaf)") and hasClickAction()).performClick()
+        waitForText("Caffeine ~5 mg (decaf)")
+    }
+
+    @Test
+    fun aShotLeftUnweighedIsMarkedAndCanBeCorrectedLater() {
+        start("09:00", listOf(guji))
+        startBrew("Espresso")
+        compose.onNodeWithText("Leave yield blank", substring = true).performScrollTo()
+        save()
+        waitForText("g3 · 18→~36 g")
+        val id = intake().single().brewLogId!!
+        assertEquals(false, runBlocking { graph.db.brewDao().log(id)!!.weighed })
+
+        compose.onNode(hasContentDescription("Edit Ethiopia Guji Espresso")).performClick()
+        waitForText("Edit brew")
+        field("Yield").performScrollTo().performTextReplacement("42")
+        compose.onRoot().captureRoboImage("screenshots/edit_brew.png")
+        compose.onNode(hasText("Save changes") and hasClickAction()).performClick()
+
+        waitForText("g3 · 18→42 g")
+        val log = runBlocking { graph.db.brewDao().log(id)!! }
+        assertEquals(true, log.weighed)
+        assertEquals(42.0, log.outG, 0.0)
+        assertEquals(log.caffeineMg, intake().single().mg, 1e-9)
+    }
+
+    @Test
+    fun aBrewLoggedAgainstTheWrongCoffeeAndDayIsMovedWithItsCaffeine() {
+        // What happened on the phone: the session opened on the decaf, but the shot was the Guji.
+        start("09:00", listOf(guji, decaf))
+        waitForText("ON THE SHELF")
+        compose.onNode(hasText("Kicking Horse") and hasClickAction()).performClick()
+        startBrew("Espresso")
+        save()
+        waitForText("Saved: Kicking Horse · espresso")
+        val id = intake().single().brewLogId!!
+        val loggedAt = runBlocking { graph.db.brewDao().log(id)!!.brewedAt }
+
+        compose.onNode(hasContentDescription("Edit Kicking Horse Espresso")).performClick()
+        waitForText("Edit brew")
+        compose.onNode(hasText("Ethiopia Guji") and hasClickAction()).performClick()
+        waitForText("Caffeine goes from ~5 mg to ~164 mg", substring = true)
+        compose.onNode(hasText("Yesterday") and hasClickAction()).performScrollTo().performClick()
+        compose.onNode(hasText("Save changes") and hasClickAction()).performClick()
+        waitForText("Ethiopia Guji · Espresso")
+
+        val log = runBlocking { graph.db.brewDao().log(id)!! }
+        assertEquals(1L, log.beanId)
+        assertEquals(163.8, log.caffeineMg, 0.1)
+        assertEquals(loggedAt - 86_400_000L, log.brewedAt)
+        val event = intake().single()
+        assertEquals(log.brewedAt, event.takenAt)
+        assertEquals(163.8, event.mg, 0.1)
+        assertEquals("Espresso · Ethiopia Guji", event.label)
+    }
+
+    @Test
+    fun deletingABrewFromItsEditorTakesItAndItsCaffeineOff() {
+        start("09:00", listOf(guji))
+        startBrew("Espresso")
+        save()
+        waitForText("g3 · 18→~36 g")
+        compose.onNode(hasContentDescription("Edit Ethiopia Guji Espresso")).performClick()
+        waitForText("Delete this brew")
+        compose.onNodeWithText("Delete this brew").performScrollTo().performClick()
+        compose.onNode(hasText("Delete") and hasClickAction()).performClick()
+        waitForText("Your brews show up here once you log one.")
+        assertEquals(0, intake().size)
+    }
+
+    @Test
+    fun theShotTimerFillsTime() {
+        start("09:00", listOf(guji))
+        startBrew("Espresso")
+        compose.onNodeWithText("Start timer").performScrollTo()
+        // The timer ticks every frame, so drive the clock by hand while it runs.
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Start timer").performClick()
+        compose.mainClock.advanceTimeBy(27_300)
+        compose.onNodeWithText("Stop").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.autoAdvance = true
+        waitForText("Reset")
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Time") and hasText("27")).fetchSemanticsNodes().isNotEmpty() }
+        save()
+        waitForText("g3 · 18→~36 g · 27 s")
+    }
+
+    @Test
+    fun aFreddoStartsFromTheAeroPressDialIn() {
+        start("09:00", listOf(guji))
+        startBrew("AeroPress")
+        compose.onNode(hasContentDescription("Coarser")).performClick() // 17 -> 18
+        save()
+        waitForText("Saved: Ethiopia Guji · aeropress")
+        startBrew("Freddo")
+        compose.onNode(hasContentDescription("Grind 18")).assertExists()
+        compose.onNodeWithText("Last time with this coffee").assertExists()
+        save()
+        compose.waitUntil(5_000) { intake().size == 2 }
+        assertEquals("Caffè freddo · Ethiopia Guji", intake().last().label)
+    }
+
+    @Test
+    fun teaIsLoggedWithAConfirmationThatCanUndo() {
         start("10:30", listOf(guji))
         waitForText("+ Tea")
         compose.onNodeWithText("+ Tea").performClick()
-        compose.onNodeWithText("Black tea · ~30 mg").performClick()
+        waitForText("Log a tea")
+        compose.onNode(hasText("Black") and hasText("~30 mg") and hasClickAction()).performClick()
         waitForText("Black tea logged · ~30 mg")
-        compose.onRoot().captureRoboImage("screenshots/brew_tea_logged.png")
-        assertEquals(30.0, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single().mg }, 0.0)
-
+        assertEquals(30.0, intake().single().mg, 0.0)
         compose.onNodeWithText("Undo").performClick()
-        compose.waitUntil(5_000) { runBlocking { graph.db.brewDao().observeIntakeSince(0).first().isEmpty() } }
+        compose.waitUntil(5_000) { intake().isEmpty() }
     }
 
     @Test
-    fun undoingTeaNeverTouchesABrew() {
-        start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Yield (g)")
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-        waitForText("LAST BREW")
-        val brewIntake = runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single() }
-        runBlocking { graph.brewRepository.undoTea(brewIntake.id) }
-        assertEquals(1, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().size })
+    fun aSavedTeaIsOneTapAndCanBeRenamed() {
+        start("10:30", listOf(guji))
+        waitForText("+ Tea")
+        compose.onNodeWithText("+ Tea").performClick()
+        compose.onNode(hasText("+ Save a tea you drink often") and hasClickAction()).performClick()
+        compose.onNode(hasText("Tea name") and hasSetTextAction()).performTextInput("Earl Grey")
+        compose.onNode(hasText("Save tea") and hasClickAction()).performClick()
+        waitForText("Earl Grey")
+        compose.onRoot().captureRoboImage("screenshots/tea.png")
+
+        compose.onNode(hasText("Earl Grey") and hasClickAction()).performClick()
+        waitForText("Earl Grey logged · ~30 mg")
+        assertEquals("Earl Grey", intake().single().label)
+        assertEquals(1, runBlocking { graph.db.teaDao().observeAll().first().single().timesLogged })
+
+        compose.onNodeWithText("+ Tea").performClick()
+        waitForText("Earl Grey")
+        compose.onNode(hasText("Earl Grey") and hasClickAction()).performTouchInput { longClick() }
+        compose.onNode(hasText("Tea name") and hasSetTextAction()).performTextReplacement("Lady Grey")
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        waitForText("Lady Grey")
     }
 
     @Test
     fun theBeanPageShowsDialHistoryAfterABrew() {
         start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Yield (g)")
-        compose.onNode(hasContentDescription("Rate 4 of 5")).performClick()
-        compose.onNodeWithText("Balanced").performClick()
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-        waitForText("LAST BREW")
+        startBrew("Espresso")
+        compose.onNode(hasContentDescription("Rate 4 of 5")).performScrollTo().performClick()
+        compose.onNode(hasText("Balanced") and hasClickAction()).performScrollTo().performClick()
+        save()
+        waitForText("RECENT BREWS")
+        gone("New brew")
 
         compose.onNodeWithText("Vault").performClick()
         waitForText("Ethiopia Guji")
@@ -191,131 +350,12 @@ class BrewScreenTest {
     }
 
     @Test
-    fun aShotLeftUnweighedIsMarkedAndCanBeCorrectedLater() {
-        start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Left blank, this brew is marked not weighed", substring = true)
-        compose.onNode(hasContentDescription("Rate 3 of 5")).performClick()
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-
-        waitForText("not weighed")
-        compose.onNodeWithText("18 → ~36 g").performScrollTo()
-        compose.onRoot().captureRoboImage("screenshots/brew_bar_unweighed.png")
-        val id = runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single().brewLogId!! }
-        assertEquals(false, runBlocking { graph.db.brewDao().log(id)!!.weighed })
-
-        // Later the scale behaves: tap the last brew and fill in the real yield.
-        compose.onNode(hasText("Edit") and hasClickAction()).performScrollTo().performClick()
-        waitForText("Edit brew")
-        compose.onNodeWithText("Yield (g)").performTextReplacement("42")
-        compose.onRoot().captureRoboImage("screenshots/brew_edit.png")
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-
-        waitForText("18 → 42 g")
-        assertEquals(0, compose.onAllNodes(hasText("not weighed")).fetchSemanticsNodes().size)
-        val log = runBlocking { graph.db.brewDao().log(id)!! }
-        assertEquals(true, log.weighed)
-        assertEquals(42.0, log.outG, 0.0)
-        assertEquals(log.caffeineMg, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().single().mg }, 1e-9)
-    }
-
-    @Test
-    fun deletingTheLastBrewFromItsEditorTakesItOff() {
-        start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Yield (g)")
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-        waitForText("LAST BREW")
-
-        compose.onNode(hasText("Edit") and hasClickAction()).performScrollTo().performClick()
-        waitForText("Delete this brew")
-        compose.onNodeWithText("Delete this brew").performScrollTo().performClick()
-        compose.onNodeWithText("Delete").performClick()
-
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("LAST BREW")).fetchSemanticsNodes().isEmpty() }
-        assertEquals(0, runBlocking { graph.db.brewDao().observeIntakeSince(0).first().size })
-    }
-
-    @Test
-    fun theShotTimerFillsTimeInTheLog() {
-        start("09:00", listOf(guji))
-        waitForText("Start timer")
-        compose.onNodeWithText("Start timer").performScrollTo()
-        // The timer ticks every frame, so drive the clock by hand while it runs.
-        compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("Start timer").performClick()
-        compose.mainClock.advanceTimeBy(27_300)
-        compose.onRoot().captureRoboImage("screenshots/brew_timer_running.png")
-        compose.onNodeWithText("Stop").performClick()
-        compose.mainClock.advanceTimeByFrame()
-        compose.mainClock.autoAdvance = true
-        waitForText("Reset")
-
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Time (s)")
-        compose.onNode(hasText("Time (s)") and hasText("27")).assertExists()
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-
-        waitForText("18 → ~36 g · 27 s")
-        // Logging clears the timer for the next shot.
-        waitForText("Start timer")
-    }
-
-    @Test
-    fun theNextShotCanBeChangedRightOnTheCard() {
-        start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasContentDescription("Coarser")).performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasContentDescription("Grind 4")).fetchSemanticsNodes().isNotEmpty() }
-
-        compose.onNode(hasText("18 g") and hasClickAction()).performScrollTo().performClick()
-        waitForText("Dose (g)")
-        compose.onNode(hasSetTextAction()).performTextReplacement("11")
-        compose.onRoot().captureRoboImage("screenshots/brew_next_shot_typing.png")
-        compose.onNodeWithText("Set").performClick()
-        waitForText("11 g")
-        compose.onNodeWithText("1:3.3").assertExists()
-        compose.onRoot().captureRoboImage("screenshots/brew_next_shot_changed.png")
-
-        val preset = runBlocking {
-            graph.db.brewDao().preset(1, BrewMethod.ESPRESSO, graph.brewRepository.defaultGrinder().id, FilterOption.SINGLE_WALL)
-        }!!
-        assertEquals(4.0, preset.grindSetting!!, 0.0)
-        assertEquals(11.0, preset.doseG, 0.0)
-
-        // The log screen starts from the card.
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Yield (g)")
-        compose.onNode(hasText("Dose (g)") and hasText("11")).assertExists()
-    }
-
-    @Test
-    fun fixingTheLastShotsYieldFixesTheNextShotToo() {
-        // What happened on the phone: logged with the yield blank, then corrected it to 31 g.
-        start("09:00", listOf(guji))
-        waitForText("Log this shot")
-        compose.onNode(hasText("Log this shot") and hasClickAction()).performClick()
-        waitForText("Yield (g)")
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-        waitForText("not weighed")
-
-        compose.onNode(hasText("Edit") and hasClickAction()).performScrollTo().performClick()
-        waitForText("Edit brew")
-        compose.onNodeWithText("Yield (g)").performTextReplacement("31")
-        compose.onNodeWithText("Save").performScrollTo().performClick()
-
-        waitForText("18 → 31 g")
-        compose.onNode(hasText("31 g") and hasClickAction()).assertExists()
-        compose.onNodeWithText("1:1.7").assertExists()
-    }
-
-    @Test
     @Config(qualifiers = "w412dp-h915dp-xxhdpi", fontScale = 1.3f)
-    fun largerTextStillFitsTheDial() {
-        start("09:00", listOf(guji))
-        waitForText("Espresso range")
-        compose.onRoot().captureRoboImage("screenshots/brew_bar_large_text.png")
+    fun largerTextStillFits() {
+        start("09:00", listOf(guji, decaf))
+        waitForText("ON THE SHELF")
+        compose.onRoot().captureRoboImage("screenshots/home_large_text.png")
+        startBrew("Espresso")
+        compose.onRoot().captureRoboImage("screenshots/session_large_text.png")
     }
 }

@@ -63,6 +63,27 @@ interface BrewDao {
     )
     suspend fun lastLog(beanId: Long, method: BrewMethod, grinderId: Long, filter: FilterOption): BrewLog?
 
+    /** The latest brew among methods that share one dial-in memory (AeroPress and freddo). */
+    @Query(
+        "SELECT * FROM brew_logs WHERE bean_id = :beanId AND method IN (:methods) " +
+            "AND grinder_id = :grinderId AND filter = :filter ORDER BY brewed_at DESC, id DESC LIMIT 1",
+    )
+    suspend fun lastLogIn(beanId: Long, methods: List<BrewMethod>, grinderId: Long, filter: FilterOption): BrewLog?
+
+    @Query(
+        "SELECT * FROM brew_logs WHERE bean_id = :beanId AND method IN (:methods) " +
+            "AND grinder_id = :grinderId AND filter = :filter ORDER BY brewed_at DESC, id DESC LIMIT 1",
+    )
+    fun observeLastLogIn(beanId: Long, methods: List<BrewMethod>, grinderId: Long, filter: FilterOption): Flow<BrewLog?>
+
+    /** The most recent brews of any coffee, newest first, for Home. */
+    @Query("SELECT * FROM brew_logs ORDER BY brewed_at DESC, id DESC LIMIT :limit")
+    fun observeRecentLogs(limit: Int): Flow<List<BrewLog>>
+
+    /** When each bag was last brewed, so the shelf can put the recent ones first. */
+    @Query("SELECT bean_id, MAX(brewed_at) AS last_brewed FROM brew_logs GROUP BY bean_id")
+    fun observeLastBrewed(): Flow<List<BeanLastBrewed>>
+
     @Query("SELECT * FROM brew_logs WHERE bean_id = :beanId ORDER BY brewed_at DESC")
     fun observeLogsForBean(beanId: Long): Flow<List<BrewLog>>
 
@@ -88,8 +109,8 @@ interface BrewDao {
     @Update
     suspend fun updateLog(log: BrewLog)
 
-    @Query("UPDATE intake_events SET mg = :mg, taken_at = :takenAt WHERE brew_log_id = :brewLogId")
-    suspend fun updateIntakeForLog(brewLogId: Long, mg: Double, takenAt: Long)
+    @Query("UPDATE intake_events SET mg = :mg, taken_at = :takenAt, label = :label WHERE brew_log_id = :brewLogId")
+    suspend fun updateIntakeForLog(brewLogId: Long, mg: Double, takenAt: Long, label: String)
 
     /** Every rated brew, for the shot-stars tie-breaker in the Favorites sort. */
     @Query("SELECT bean_id, rating FROM brew_logs WHERE rating IS NOT NULL")
@@ -97,6 +118,30 @@ interface BrewDao {
 
     @Query("SELECT COALESCE(SUM(dose_g), 0) FROM brew_logs WHERE bean_id = :beanId")
     fun observeGramsUsed(beanId: Long): Flow<Double>
+}
+
+data class BeanLastBrewed(
+    @androidx.room.ColumnInfo(name = "bean_id") val beanId: Long,
+    @androidx.room.ColumnInfo(name = "last_brewed") val lastBrewed: Long,
+)
+
+/** Saved teas, most-used first. */
+@Dao
+interface TeaDao {
+    @Query("SELECT * FROM saved_teas ORDER BY times_logged DESC, name COLLATE NOCASE")
+    fun observeAll(): Flow<List<SavedTea>>
+
+    @Insert
+    suspend fun insert(tea: SavedTea): Long
+
+    @Update
+    suspend fun update(tea: SavedTea)
+
+    @Delete
+    suspend fun delete(tea: SavedTea)
+
+    @Query("UPDATE saved_teas SET times_logged = times_logged + 1 WHERE id = :id")
+    suspend fun countUse(id: Long)
 }
 
 data class BeanRating(

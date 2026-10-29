@@ -10,7 +10,7 @@ import com.padraik99.grindhaus.domain.GrindAdvisor
 import com.padraik99.grindhaus.domain.Methods
 import com.padraik99.grindhaus.domain.TeaType
 import java.time.Clock
-import java.time.LocalDate
+import java.time.Instant
 
 /** Writes that touch several tables at once, each as one all-or-nothing transaction. */
 class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock) {
@@ -18,6 +18,11 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
     private val beans = db.beanDao()
     private val brews = db.brewDao()
     private val grinders = db.grinderDao()
+    private val teas = db.teaDao()
+
+    private fun epochDay(millis: Long): Long = Instant.ofEpochMilli(millis).atZone(clock.zone).toLocalDate().toEpochDay()
+
+    private fun intakeLabel(method: BrewMethod, bean: Bean) = "${Methods.spec(method).label} · ${bean.title}"
 
     /** Makes sure there is a grinder to dial in against; seeds the Maestri House. */
     suspend fun defaultGrinder(): Grinder =
@@ -44,7 +49,7 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
                     mg = log.caffeineMg,
                     source = IntakeSource.BREW,
                     brewLogId = id,
-                    label = "${Methods.spec(log.method).label} · ${bean.title}",
+                    label = intakeLabel(log.method, bean),
                 ),
             )
             val nextGrind = if (autoApplyGrind) {
@@ -54,35 +59,47 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
             }
             brews.savePreset(
                 DialPreset(
-                    beanId = log.beanId, method = log.method, grinderId = log.grinderId, filter = log.filter,
-                    grindSetting = nextGrind, doseG = log.doseG, outG = log.outG, updatedAt = log.brewedAt,
+                    beanId = log.beanId, method = log.method.dialKey, grinderId = log.grinderId, filter = log.filter,
+                    grindSetting = nextGrind, doseG = log.doseG, outG = log.outG, updatedAt = clock.millis(),
                 ),
             )
-            beans.markOpened(log.beanId, LocalDate.now(clock).toEpochDay())
+            beans.markOpened(log.beanId, epochDay(log.brewedAt))
             id
         }
 
     /**
-     * Saves corrections to a brew. Caffeine is recalculated from the corrected dose and
-     * yield, and today's intake follows. If it's the most recent brew of its kind, the
-     * recipe for the next shot follows too: its dose and yield, and its grind only when the
-     * grind itself was corrected (so a grind suggestion already taken isn't undone).
+     * Saves corrections to a brew, including its coffee, method and time. Caffeine is
+     * recalculated for the (possibly different) bean and method, and the intake record moves
+     * to the corrected time, so tonight's numbers follow.
+     *
+     * If it's now the most recent brew of its kind, the recipe for the next one follows too:
+     * dose and yield always, grind only when the grind (or the coffee, method or basket) was
+     * corrected, so a grind suggestion already taken isn't undone.
      */
     suspend fun updateBrew(log: BrewLog, bean: Bean) = db.withTransaction {
         val before = brews.log(log.id)
-        val corrected = log.copy(caffeineMg = caffeineMg(bean, log.method, log.doseG, log.outG))
-        brews.updateLog(corrected)
-        brews.updateIntakeForLog(corrected.id, corrected.caffeineMg, corrected.brewedAt)
+        val spec = Methods.spec(log.method)
+        val filter = log.filter.takeIf { it in spec.filters } ?: Methods.defaultFilter(log.method, bean.preGround)
+        val fixed = log.copy(
+            beanId = bean.id,
+            filter = filter,
+            caffeineMg = caffeineMg(bean, log.method, log.doseG, log.outG),
+        )
+        brews.updateLog(fixed)
+        brews.updateIntakeForLog(fixed.id, fixed.caffeineMg, fixed.brewedAt, intakeLabel(fixed.method, bean))
+        beans.markOpened(bean.id, epochDay(fixed.brewedAt))
 
-        val latest = brews.lastLog(log.beanId, log.method, log.grinderId, log.filter)
-        if (latest?.id == log.id) {
-            val preset = brews.preset(log.beanId, log.method, log.grinderId, log.filter)
-            val grindCorrected = before != null && before.grindSetting != log.grindSetting
+        val key = fixed.method.dialKey
+        val latest = brews.lastLogIn(bean.id, key.dialFamily, fixed.grinderId, filter)
+        if (latest?.id == fixed.id) {
+            val preset = brews.preset(bean.id, key, fixed.grinderId, filter)
+            val moved = before == null || before.beanId != fixed.beanId || before.method.dialKey != key ||
+                before.filter != filter || before.grindSetting != fixed.grindSetting
             brews.savePreset(
                 DialPreset(
-                    beanId = log.beanId, method = log.method, grinderId = log.grinderId, filter = log.filter,
-                    grindSetting = if (grindCorrected || preset == null) log.grindSetting else preset.grindSetting,
-                    doseG = log.doseG, outG = log.outG, updatedAt = clock.millis(),
+                    beanId = bean.id, method = key, grinderId = fixed.grinderId, filter = filter,
+                    grindSetting = if (moved || preset == null) fixed.grindSetting else preset.grindSetting,
+                    doseG = fixed.doseG, outG = fixed.outG, updatedAt = clock.millis(),
                 ),
             )
         }
@@ -124,12 +141,23 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
 
     suspend fun undoTea(intakeId: Long) = brews.deleteStandaloneIntake(intakeId)
 
-    suspend fun logTea(type: TeaType): Long = brews.insertIntake(
-        IntakeEvent(
-            takenAt = clock.millis(),
-            mg = CaffeineEstimates.tea(type).mg,
-            source = IntakeSource.TEA,
-            label = "${type.name.lowercase().replaceFirstChar { it.uppercase() }} tea",
-        ),
-    )
+    /** Logs a cup of tea now; a saved tea gives it its name and counts towards "most used". */
+    suspend fun logTea(type: TeaType, saved: SavedTea? = null): Long = db.withTransaction {
+        saved?.let { teas.countUse(it.id) }
+        brews.insertIntake(
+            IntakeEvent(
+                takenAt = clock.millis(),
+                mg = CaffeineEstimates.tea(type).mg,
+                source = IntakeSource.TEA,
+                label = saved?.name ?: "${type.name.lowercase().replaceFirstChar { it.uppercase() }} tea",
+            ),
+        )
+    }
+
+    suspend fun saveTea(name: String, type: TeaType): Long = teas.insert(SavedTea(name = name.trim(), type = type))
+
+    suspend fun updateTea(tea: SavedTea) = teas.update(tea.copy(name = tea.name.trim()))
+
+    /** Forgets a saved tea. Cups already logged keep their name and caffeine. */
+    suspend fun removeTea(tea: SavedTea) = teas.delete(tea)
 }

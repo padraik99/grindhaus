@@ -8,8 +8,10 @@ import androidx.compose.ui.graphics.Color
 /** Palette from the mockups. */
 object GrindhausColors {
     val Roast = Color(0xFF17130F)      // screen background
-    val Surface = Color(0xFF241E19)    // cards
-    val SurfaceHigh = Color(0xFF2E2620)
+    val Surface = Color(0xFF322A23)    // cards: about 25% lighter than they were, so they stand off the ground
+    val Edge = Color(0xFF201A15)       // card border, a shade darker than the card
+    val Inset = Color(0xFF1F1914)      // fields and wells inside a card
+    val SurfaceHigh = Color(0xFF3D342C)
     val Line = Color(0xFF3A312A)
     val Outline = Color(0xFF4A3F37)
     val Foam = Color(0xFFF2EBE3)       // primary text

@@ -97,7 +97,7 @@ fun ShotTimer(state: ShotTimerState, target: IntRange?) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(GrindhausColors.SurfaceHigh, RoundedCornerShape(14.dp))
+            .background(GrindhausColors.Inset, RoundedCornerShape(14.dp))
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),

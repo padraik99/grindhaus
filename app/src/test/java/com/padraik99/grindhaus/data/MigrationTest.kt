@@ -77,7 +77,7 @@ class MigrationTest {
             assertEquals(true, bean.preGround)
             assertEquals(null, bean.buyAgain)
             assertEquals(1500.0, bean.rankScore, 0.0)
-            assertEquals(4, db.openHelper.readableDatabase.version)
+            assertEquals(5, db.openHelper.readableDatabase.version)
             assertEquals(0, db.brewDao().observeIntakeSince(0).first().size)
         } finally {
             db.close()
@@ -121,7 +121,7 @@ class MigrationTest {
             assertEquals("First one", log.notes)
             assertEquals(170.0, db.brewDao().observeIntakeSince(0).first().single().mg, 0.0)
             assertEquals(1512.0, db.beanDao().get(1)!!.rankScore, 0.0)
-            assertEquals(4, db.openHelper.readableDatabase.version)
+            assertEquals(5, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }
@@ -157,7 +157,31 @@ class MigrationTest {
             assertEquals("Colombian Anei", bean.title)
             assertEquals(null, bean.barcode)
             assertEquals(false, db.brewDao().log(1)!!.weighed)
-            assertEquals(4, db.openHelper.readableDatabase.version)
+            assertEquals(5, db.openHelper.readableDatabase.version)
+        } finally {
+            db.close()
+        }
+    }
+
+    /** Version 4 is what 0.1.8 and 0.1.9 put on the phone, scanned barcodes included. */
+    @Test
+    fun version4BagsSurviveAndThereAreNoSavedTeasYet() = runBlocking {
+        val file = freshFile("upgrade-v4.db")
+        createVersion(4, file) {
+            execSQL(
+                """INSERT INTO beans (id, title, roaster, origin, species, robusta_share, roast_level, roast_date,
+                   best_by_date, purchase_date, opened_date, bag_grams, pre_ground, label_photo_path, tasting_tags,
+                   notes, archived, buy_again, rank_score, barcode)
+                   VALUES (1, 'Kicking Horse', 'Kicking Horse', NULL, 'DECAF', NULL, 'DARK', NULL,
+                   NULL, 20385, 20386, 454.0, 0, NULL, '', '', 0, NULL, 1500.0, '0123456789012')""",
+            )
+        }
+
+        val db = open(file)
+        try {
+            assertEquals("0123456789012", db.beanDao().get(1)!!.barcode)
+            assertEquals(0, db.teaDao().observeAll().first().size)
+            assertEquals(5, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }

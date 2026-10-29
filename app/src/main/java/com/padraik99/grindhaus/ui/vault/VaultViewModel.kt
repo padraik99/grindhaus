@@ -13,13 +13,11 @@ import com.padraik99.grindhaus.data.Bean
 import com.padraik99.grindhaus.data.BeanRating
 import com.padraik99.grindhaus.data.BrewLog
 import com.padraik99.grindhaus.data.Grinder
+import com.padraik99.grindhaus.domain.BrewMethod
 import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Comparison
 import com.padraik99.grindhaus.domain.Freshness
 import com.padraik99.grindhaus.domain.FreshnessRules
-import com.padraik99.grindhaus.ui.brew.BrewDraft
-import com.padraik99.grindhaus.ui.brew.plannedOutG
-import com.padraik99.grindhaus.ui.brew.withDraft
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +28,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.ZoneId
 
 data class BeanCard(val bean: Bean, val freshness: Freshness, val isFavourite: Boolean = false)
 
@@ -123,13 +122,26 @@ class VaultViewModel(private val graph: AppGraph) : ViewModel() {
         viewModelScope.launch { graph.brewRepository.updateVerdict(beanId, buyAgain, comparedWith, outcome) }
     }
 
-    /** Corrects a logged brew; caffeine and the intake record are recalculated. */
-    fun updateBrew(original: BrewLog, draft: BrewDraft, bean: Bean, onDone: () -> Unit) {
+    /** Saves an edited brew: its coffee, method, time and numbers. Caffeine follows. */
+    fun updateBrew(log: BrewLog, bean: Bean, onDone: () -> Unit) {
         viewModelScope.launch {
-            graph.brewRepository.updateBrew(original.withDraft(draft, original.plannedOutG()), bean)
+            graph.brewRepository.updateBrew(log, bean)
             onDone()
         }
     }
+
+    fun caffeineMg(bean: Bean, method: BrewMethod, doseG: Double, outG: Double) =
+        graph.brewRepository.caffeineMg(bean, method, doseG, outG)
+
+    fun zone(): ZoneId = graph.clock.zone
+
+    /** Open bags, for moving a brew to another coffee. */
+    val shelf: StateFlow<List<Bean>> =
+        dao.observeList(false, "").stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val allBeans: StateFlow<List<Bean>> =
+        combine(dao.observeList(false, ""), dao.observeList(true, "")) { a, b -> a + b }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun scannerFor(context: Context): BarcodeScanner = graph.scannerFor(context)
 

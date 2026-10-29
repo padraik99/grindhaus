@@ -8,7 +8,22 @@ package com.padraik99.grindhaus.domain
  * its source so it can be checked or replaced.
  */
 
-enum class BrewMethod { ESPRESSO, AEROPRESS, MOKA, POUR_OVER, FRENCH_PRESS }
+enum class BrewMethod {
+    ESPRESSO, AEROPRESS, MOKA, POUR_OVER, FRENCH_PRESS,
+
+    /** Caffè freddo: brewed on the AeroPress, sugared, frozen, thawed and shaken. */
+    FREDDO,
+    ;
+
+    /**
+     * The method whose dial-in memory this one uses. A freddo is an AeroPress brew underneath,
+     * so it shares the AeroPress grind, dose and water.
+     */
+    val dialKey: BrewMethod get() = if (this == FREDDO) AEROPRESS else this
+
+    /** Every method that shares this one's dial-in memory. */
+    val dialFamily: List<BrewMethod> get() = entries.filter { it.dialKey == dialKey }
+}
 
 /** Robusta has roughly twice arabica's caffeine; blends sit between. */
 enum class Species { ARABICA, ROBUSTA, BLEND, DECAF, NOT_SURE }
@@ -53,6 +68,8 @@ object CaffeineEstimates {
     private val FIXED_YIELD = mapOf(
         BrewMethod.MOKA to 11.4,
         BrewMethod.AEROPRESS to 10.0,
+        // Brewed on the AeroPress; freezing and thawing don't change the caffeine.
+        BrewMethod.FREDDO to 10.0,
         BrewMethod.POUR_OVER to 10.2,
         BrewMethod.FRENCH_PRESS to 6.9,
     )

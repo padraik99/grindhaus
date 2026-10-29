@@ -64,13 +64,11 @@ import com.padraik99.grindhaus.domain.BuyAgain
 import com.padraik99.grindhaus.domain.Comparison
 import com.padraik99.grindhaus.domain.Methods
 import com.padraik99.grindhaus.domain.Species
-import com.padraik99.grindhaus.ui.brew.BrewLogEditor
+import com.padraik99.grindhaus.ui.brew.EditBrewScreen
 import com.padraik99.grindhaus.ui.brew.Stars
 import com.padraik99.grindhaus.ui.brew.TasteTag
 import com.padraik99.grindhaus.ui.brew.formatG
 import com.padraik99.grindhaus.ui.brew.formatGrind
-import com.padraik99.grindhaus.ui.brew.plannedOutG
-import com.padraik99.grindhaus.ui.brew.toDraft
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -126,16 +124,19 @@ fun VaultRoute(viewModel: VaultViewModel) {
             val b = bean
             if (editLogId != NONE && editingLog != null && b != null) {
                 BackHandler { editLogId = NONE }
-                val method = Methods.spec(editingLog.method)
-                BrewLogEditor(
-                    title = "Edit brew",
-                    subtitle = "${method.label} · ${editingLog.filter.label} · ${b.title}",
-                    method = method,
-                    grinder = grinders.firstOrNull { it.id == editingLog.grinderId } ?: Grinder.MAESTRI_HOUSE,
-                    initial = editingLog.toDraft(),
-                    plannedOutG = editingLog.plannedOutG(),
-                    onCancel = { editLogId = NONE },
-                    onSave = { draft -> viewModel.updateBrew(editingLog, draft, b) { editLogId = NONE } },
+                val shelf by viewModel.shelf.collectAsStateWithLifecycle()
+                val all by viewModel.allBeans.collectAsStateWithLifecycle()
+                EditBrewScreen(
+                    log = editingLog,
+                    bean = b,
+                    choices = shelf,
+                    allBeans = all,
+                    grinders = grinders,
+                    zone = viewModel.zone(),
+                    today = viewModel.today(),
+                    caffeine = viewModel::caffeineMg,
+                    onClose = { editLogId = NONE },
+                    onSave = { log, bean -> viewModel.updateBrew(log, bean) { editLogId = NONE } },
                     onDelete = {
                         viewModel.deleteLog(editingLog)
                         editLogId = NONE

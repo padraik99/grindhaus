@@ -48,6 +48,12 @@ object Methods {
             weighsYield = false, timesShot = false,
         ),
         MethodSpec(
+            BrewMethod.FREDDO, "Caffè freddo",
+            filters = listOf(FilterOption.PAPER, FilterOption.METAL),
+            defaultDoseG = 15.0, ratio = 15.0, startingGrind = 17.0,
+            weighsYield = false, timesShot = false,
+        ),
+        MethodSpec(
             BrewMethod.MOKA, "Moka",
             filters = listOf(FilterOption.NONE),
             defaultDoseG = 15.0, ratio = 10.0, startingGrind = 13.0,
@@ -68,7 +74,7 @@ object Methods {
     )
 
     /** Gear Patrick owns; the rest stay hidden until Settings lets him add them. */
-    val OWNED: List<BrewMethod> = listOf(BrewMethod.ESPRESSO, BrewMethod.AEROPRESS, BrewMethod.MOKA)
+    val OWNED: List<BrewMethod> = listOf(BrewMethod.ESPRESSO, BrewMethod.AEROPRESS, BrewMethod.MOKA, BrewMethod.FREDDO)
 
     fun spec(method: BrewMethod): MethodSpec = ALL.first { it.method == method }
 
