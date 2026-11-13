@@ -141,6 +141,14 @@ class BrewRepository(private val db: GrindhausDatabase, private val clock: Clock
 
     suspend fun undoTea(intakeId: Long) = brews.deleteStandaloneIntake(intakeId)
 
+    /** Caffeine from anywhere else (a café, a soda, a pill), counted from now. */
+    suspend fun logOther(mg: Double): Long = brews.insertIntake(
+        IntakeEvent(takenAt = clock.millis(), mg = mg, source = IntakeSource.CUSTOM, label = "Other caffeine"),
+    )
+
+    /** Takes back a tea or other entry. Brews are only removed from their own editor. */
+    suspend fun removeStandaloneIntake(intakeId: Long) = brews.deleteStandaloneIntake(intakeId)
+
     /** Logs a cup of tea now; a saved tea gives it its name and counts towards "most used". */
     suspend fun logTea(type: TeaType, saved: SavedTea? = null): Long = db.withTransaction {
         saved?.let { teas.countUse(it.id) }

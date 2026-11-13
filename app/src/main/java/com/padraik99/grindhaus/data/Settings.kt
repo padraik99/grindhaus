@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalTime
 
-/** Settings that are preferences, not records. Settings screen arrives with Sleep Guard. */
+/** Settings that are preferences, not records. The sleep ones are set on the Sleep tab. */
 data class GrindhausSettings(
     val bedtime: LocalTime = LocalTime.of(23, 30),
     val halfLifeHours: Double = 5.0,
@@ -53,5 +53,10 @@ class SettingsStore(private val store: DataStore<Preferences>) {
 
     suspend fun setHalfLife(hours: Double) {
         store.edit { it[Keys.HALF_LIFE] = hours }
+    }
+
+    /** Null goes back to the limit derived from the half-life. */
+    suspend fun setLimitOverride(mg: Double?) {
+        store.edit { if (mg == null) it.remove(Keys.LIMIT_OVERRIDE) else it[Keys.LIMIT_OVERRIDE] = mg }
     }
 }

@@ -1,6 +1,7 @@
 package com.padraik99.grindhaus.ui
 
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -37,10 +38,10 @@ class GrindhausAppScreenshotTest {
     fun tearDown() = graph.db.close()
 
     @Test
-    fun sleepTabShowsDerivedLimits() {
+    fun sleepTabOpensOnTonightsForecast() {
         compose.setContent { GrindhausTheme { GrindhausApp(graph = graph) } }
         compose.onNodeWithText("Sleep").performClick()
-        compose.onNodeWithText("5 h  →  32 mg").assertExists()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Under your 32\u00A0mg limit").fetchSemanticsNodes().isNotEmpty() }
         compose.onRoot().captureRoboImage("screenshots/sleep.png")
     }
 }
