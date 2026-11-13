@@ -1,6 +1,5 @@
 package com.padraik99.grindhaus.ui.brew
 
-import com.padraik99.grindhaus.ui.components.TimeOfDayField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,9 +60,7 @@ import com.padraik99.grindhaus.ui.components.NumberField
 import com.padraik99.grindhaus.ui.components.SectionLabel
 import com.padraik99.grindhaus.ui.components.panel
 import com.padraik99.grindhaus.ui.theme.GrindhausColors
-import java.time.Duration
 import java.time.Instant
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -98,13 +95,9 @@ fun SessionScreen(
     var taste by rememberSaveable { mutableStateOf<Taste?>(null) }
     var notes by rememberSaveable { mutableStateOf("") }
     var picking by rememberSaveable { mutableStateOf<String?>(null) }
-    var whenMode by rememberSaveable { mutableStateOf("now") }
     var dismissedSuggestion by rememberSaveable(combo) { mutableStateOf(false) }
     val timer = rememberSaveable(saver = ShotTimerState.Saver) { ShotTimerState() }
-    val zone = state.zone
     val nowAt = now()
-    val nowLocal = nowAt.atZone(zone)
-    var pickTime by rememberSaveable { mutableStateOf(nowLocal.toLocalTime().withSecond(0).withNano(0)) }
 
     // The timer's reading drops into Time when it stops.
     LaunchedEffect(timer.running) {
@@ -117,11 +110,6 @@ fun SessionScreen(
     // For espresso the cup is weighed after the shot; for the rest, the water poured is the measure.
     val actualOut = if (method.weighsYield) yieldValue else aimValue
     val outForCaffeine = actualOut ?: aimValue ?: spec.outG
-    val drankAt: Instant = when (whenMode) {
-        "15" -> nowAt.minus(Duration.ofMinutes(15))
-        "pick" -> pickedTime(pickTime.hour, pickTime.minute, nowAt, zone)
-        else -> nowAt
-    }
     val mg = doseValue?.let { caffeine(spec.bean, method.method, it, outForCaffeine) }
 
     Column(Modifier.fillMaxSize().imePadding()) {
@@ -319,23 +307,7 @@ fun SessionScreen(
                 )
             }
 
-            // When: caffeine counts from when it was drunk, not when it was logged.
-            Column(Modifier.fillMaxWidth().panel(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionLabel("When did you drink it?")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Choice("Now", whenMode == "now") { whenMode = "now" }
-                    Choice("15 min ago", whenMode == "15") { whenMode = "15" }
-                    Choice("Pick a time", whenMode == "pick") { whenMode = "pick" }
-                }
-                if (whenMode == "pick") TimeOfDayField(pickTime, { pickTime = it })
-                Text(
-                    "Caffeine counts from ${clockTime(drankAt, zone)}, so a brew logged late, or a freddo from the freezer, still adds up right.",
-                    color = GrindhausColors.Muted,
-                    fontSize = 12.sp,
-                )
-            }
-
-            mg?.let { BedtimeLine(outlook(it, drankAt)) }
+            mg?.let { BedtimeLine(outlook(it, nowAt)) }
         }
 
         Box(Modifier.fillMaxWidth().height(1.dp).background(GrindhausColors.Line))
@@ -354,7 +326,8 @@ fun SessionScreen(
                             taste = taste,
                             notes = notes,
                         ),
-                        drankAt,
+                        // Made and drunk together: caffeine counts from the tap. Edit can move it.
+                        now(),
                     )
                 },
                 enabled = doseValue != null,
@@ -364,12 +337,6 @@ fun SessionScreen(
             ) { Text("Save brew", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         }
     }
-}
-
-/** A hour and minute picked for today; if that's still ahead, it means last night. */
-fun pickedTime(hour: Int, minute: Int, now: Instant, zone: ZoneId): Instant {
-    val today = now.atZone(zone).toLocalDate().atTime(LocalTime.of(hour, minute)).atZone(zone).toInstant()
-    return if (today.isAfter(now)) today.minus(Duration.ofDays(1)) else today
 }
 
 private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)

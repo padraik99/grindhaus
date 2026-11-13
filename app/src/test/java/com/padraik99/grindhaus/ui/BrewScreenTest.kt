@@ -7,6 +7,8 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -248,26 +250,14 @@ class BrewScreenTest {
     }
 
     @Test
-    fun aBrewDrunkEarlierCanBeLoggedAtThatTime() {
+    fun aBrewCountsFromSaveAndAnEditCanMoveIt() {
         start("09:00", listOf(guji))
         startBrew("Espresso")
-        compose.onNode(hasText("Pick a time") and hasClickAction()).performScrollTo().performClick()
-        field("Hour").performScrollTo().performTextReplacement("8")
-        field("Min").performTextReplacement("05")
-        compose.onNodeWithText("Caffeine counts from 8:05 am", substring = true).assertExists()
-        compose.onRoot().captureRoboImage("screenshots/session_pick_time.png")
-        save()
-        compose.waitUntil(5_000) { intake().isNotEmpty() }
-        val expected = java.time.LocalDateTime.parse("2026-10-26T08:05").atZone(TestGraph.LA).toInstant().toEpochMilli()
-        assertEquals(expected, intake().single().takenAt)
-    }
-
-    @Test
-    fun anEditCanSetTheTimeTheBrewWasDrunk() {
-        start("09:00", listOf(guji))
-        startBrew("Espresso")
+        compose.onAllNodesWithText("When did you drink it?").assertCountEquals(0)
         save()
         waitForText("g3 · 18→~36 g")
+        val saved = java.time.LocalDateTime.parse("2026-10-26T09:00").atZone(TestGraph.LA).toInstant().toEpochMilli()
+        assertEquals(saved, intake().single().takenAt)
         compose.onNode(hasContentDescription("Edit Ethiopia Guji Espresso")).performClick()
         waitForText("Edit brew")
         field("Hour").performScrollTo().performTextReplacement("7")

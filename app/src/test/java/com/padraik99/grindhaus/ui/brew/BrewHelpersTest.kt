@@ -33,13 +33,6 @@ class BrewHelpersTest {
     }
 
     @Test
-    fun aPickedTimeLaterThanNowMeansLastNight() {
-        val now = at("2026-10-28T00:30")
-        assertEquals(at("2026-10-27T23:50"), pickedTime(23, 50, now, la))
-        assertEquals(at("2026-10-28T00:10"), pickedTime(0, 10, now, la))
-    }
-
-    @Test
     fun recentBrewsSayTodayYesterdayOrTheDate() {
         val today = LocalDate.of(2026, 10, 28)
         assertEquals("Today 9:40 am", whenLabel(weighed.brewedAt, today, la))
