@@ -12,6 +12,7 @@ import com.padraik99.grindhaus.domain.BrewMethod
 import com.padraik99.grindhaus.domain.CaffeineEstimates
 import com.padraik99.grindhaus.domain.CaffeineModel
 import com.padraik99.grindhaus.domain.Dose
+import com.padraik99.grindhaus.domain.Drink
 import com.padraik99.grindhaus.domain.SleepForecast
 import com.padraik99.grindhaus.domain.SleepForecaster
 import com.padraik99.grindhaus.domain.Species
@@ -35,7 +36,6 @@ data class SleepUiState(
     /** What's been had since the chart's start, oldest first. */
     val today: List<IntakeEvent> = emptyList(),
     val forecast: SleepForecast? = null,
-    val teaType: TeaType = TeaType.BLACK,
     val zone: ZoneId = ZoneId.systemDefault(),
 )
 
@@ -63,16 +63,18 @@ class SleepViewModel(private val graph: AppGraph) : ViewModel() {
     ) { events, settings, logs, _ ->
         val doses = events.map { Dose(it.mg, Instant.ofEpochMilli(it.takenAt)) }
         val usual = SleepForecaster.usualBrewMg(logs.map { it.caffeineMg }) ?: FALLBACK_BREW_MG
-        // Herbal has no caffeine, so the cutoff line uses black tea instead.
-        val teaType = settings.defaultTea.takeIf { CaffeineEstimates.teaDefaultMg(it) > 0 } ?: TeaType.BLACK
         val forecast = SleepForecaster.forecast(
             doses = doses,
             now = ZonedDateTime.now(clock),
             bedtime = settings.bedtime,
             halfLifeHours = settings.halfLifeHours,
             limitOverrideMg = settings.limitOverrideMg,
-            usualBrewMg = usual,
-            teaMg = CaffeineEstimates.tea(teaType).mg,
+            drinks = listOf(
+                Drink("A usual brew", usual),
+                Drink("Black tea", CaffeineEstimates.tea(TeaType.BLACK).mg),
+                Drink("Green tea", CaffeineEstimates.tea(TeaType.GREEN).mg),
+                Drink("Decaf tea", CaffeineEstimates.tea(TeaType.DECAF).mg),
+            ),
         )
         SleepUiState(
             loaded = true,
@@ -80,7 +82,6 @@ class SleepViewModel(private val graph: AppGraph) : ViewModel() {
             doses = doses,
             today = events.filter { it.takenAt >= forecast.chartStart.toEpochMilli() },
             forecast = forecast,
-            teaType = teaType,
             zone = clock.zone,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SleepUiState())

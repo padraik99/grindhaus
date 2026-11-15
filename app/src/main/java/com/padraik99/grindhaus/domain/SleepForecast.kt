@@ -17,6 +17,12 @@ sealed interface Cutoff {
     data object Passed : Cutoff
 }
 
+/** Something you might have: a usual brew, a black tea. */
+data class Drink(val name: String, val mg: Double)
+
+/** A drink and the latest it still fits tonight. */
+data class LastCall(val drink: Drink, val cutoff: Cutoff)
+
 /** Everything the Sleep tab says, worked out in one place so it can be tested without a screen. */
 data class SleepForecast(
     val now: Instant,
@@ -27,10 +33,7 @@ data class SleepForecast(
     val limitMg: Double,
     val limitIsDerived: Boolean,
     val halfLifeHours: Double,
-    val usualBrewMg: Double,
-    val usualBrewCutoff: Cutoff,
-    val teaMg: Double,
-    val teaCutoff: Cutoff,
+    val lastCalls: List<LastCall>,
     /** The span the chart draws: from the morning (or the first cup) to the end of the sleep check. */
     val chartStart: Instant,
     val chartEnd: Instant,
@@ -49,8 +52,7 @@ object SleepForecaster {
         bedtime: LocalTime,
         halfLifeHours: Double,
         limitOverrideMg: Double?,
-        usualBrewMg: Double,
-        teaMg: Double,
+        drinks: List<Drink>,
     ): SleepForecast {
         val bed = Bedtime.next(now, bedtime)
         val limit = SleepPlanner.limitMg(halfLifeHours, limitOverrideMg)
@@ -83,10 +85,7 @@ object SleepForecaster {
             limitMg = limit,
             limitIsDerived = limitOverrideMg == null,
             halfLifeHours = halfLifeHours,
-            usualBrewMg = usualBrewMg,
-            usualBrewCutoff = cutoff(usualBrewMg),
-            teaMg = teaMg,
-            teaCutoff = cutoff(teaMg),
+            lastCalls = drinks.map { LastCall(it, cutoff(it.mg)) },
             chartStart = start,
             chartEnd = end,
         )
@@ -102,6 +101,10 @@ object SleepForecaster {
         val mid = real.size / 2
         return if (real.size % 2 == 1) real[mid] else (real[mid - 1] + real[mid]) / 2
     }
+
+    /** What if: the highest point after bedtime had [extra] been drunk too. */
+    fun peakWith(doses: List<Dose>, extra: Dose, bedtime: Instant, halfLifeHours: Double): Double =
+        CaffeineModel.peakAfterBedtime(doses + extra, bedtime, halfLifeHours)
 
     /** The half-life band the chart shades: an hour quicker to two hours slower than the setting. */
     fun band(halfLifeHours: Double): ClosedFloatingPointRange<Double> {

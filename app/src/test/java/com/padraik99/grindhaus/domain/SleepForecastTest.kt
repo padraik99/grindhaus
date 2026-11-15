@@ -26,7 +26,10 @@ class SleepForecastTest {
         now: String,
         bedtime: LocalTime = LocalTime.of(23, 30),
         override: Double? = null,
-    ) = SleepForecaster.forecast(doses, at(now), bedtime, 5.0, override, espresso, tea)
+    ) = SleepForecaster.forecast(doses, at(now), bedtime, 5.0, override, listOf(Drink("A usual brew", espresso), Drink("Black tea", tea)))
+
+    private val SleepForecast.usualBrewCutoff get() = lastCalls[0].cutoff
+    private val SleepForecast.teaCutoff get() = lastCalls[1].cutoff
 
     @Test
     fun aMorningEspressoLeavesTonightUnderTheLimit() {
@@ -101,6 +104,20 @@ class SleepForecastTest {
         // The decaf (5 mg) is left out.
         assertEquals(164.0, SleepForecaster.usualBrewMg(listOf(164.0, 5.0, 180.0, 150.0))!!, 0.0)
         assertEquals(157.0, SleepForecaster.usualBrewMg(listOf(164.0, 150.0))!!, 0.0)
+    }
+
+    @Test
+    fun aTeaNowAddsToTonightAndLaterAddsMore() {
+        val doses = listOf(Dose(espresso, instant("2026-10-26T07:30")))
+        val f = forecast(doses, now = "2026-10-26T16:00")
+        val bed = f.bedtime.toInstant()
+        val now = SleepForecaster.peakWith(doses, Dose(tea, instant("2026-10-26T16:00")), bed, 5.0)
+        val later = SleepForecaster.peakWith(doses, Dose(tea, instant("2026-10-26T19:00")), bed, 5.0)
+        assertTrue(now > f.peakAfterBedMg)
+        assertTrue(later > now)
+        // A decaf tea barely moves it.
+        val decaf = SleepForecaster.peakWith(doses, Dose(CaffeineEstimates.tea(TeaType.DECAF).mg, instant("2026-10-26T21:00")), bed, 5.0)
+        assertTrue(decaf - f.peakAfterBedMg < 2.5)
     }
 
     @Test

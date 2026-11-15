@@ -105,9 +105,25 @@ class SleepScreenTest {
     fun anEveningDoubleShowsHowFarOverAndThatItsTooLate() {
         open("21:00", "20:30" to 164.0)
         waitForText("over your 32\u00A0mg limit", substring = true)
-        // Neither a usual brew nor a tea fits now.
-        compose.onAllNodesWithText("not tonight").assertCountEquals(2)
+        // Nothing fits now: a usual brew, black, green or even decaf tea.
+        compose.onAllNodesWithText("not tonight").assertCountEquals(4)
         compose.onRoot().captureRoboImage("screenshots/sleep_over.png")
+    }
+
+    @Test
+    fun tappingATeaShowsWhatItWouldLeaveTonight() {
+        open("16:00", "07:30" to 164.0)
+        compose.onNodeWithText("Green tea").performScrollTo().performClick()
+        waitForText("Had at 4:00 pm", substring = true)
+        compose.onNodeWithText("+2 h").performClick()
+        waitForText("Had at 6:00 pm", substring = true)
+        compose.onNode(hasText("Pale line: with green tea at 6:00 pm", substring = true)).assertExists()
+        compose.onRoot().captureRoboImage("screenshots/sleep_what_if.png")
+        // Tapping its name again closes it.
+        compose.onNodeWithText("Green tea", useUnmergedTree = true).performClick()
+        waitForNoText("+2 h")
+        // Nothing was logged.
+        assertEquals(1, intake().size)
     }
 
     @Test

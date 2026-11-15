@@ -210,6 +210,7 @@ private fun teaConfirmation(type: TeaType, saved: SavedTea?): String {
         TeaType.BLACK -> "Black tea"
         TeaType.GREEN -> "Green tea"
         TeaType.HERBAL -> "Herbal tea"
+        TeaType.DECAF -> "Decaf tea"
     }
     val mg = CaffeineEstimates.tea(type).mg
     return if (mg == 0.0) "$name logged · no caffeine" else String.format(Locale.US, "%s logged · ~%.0f mg", name, mg)

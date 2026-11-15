@@ -73,6 +73,14 @@ class CaffeineEstimatesTest {
         assertEquals(0.0, CaffeineEstimates.tea(TeaType.HERBAL).mg, 0.0)
     }
 
+    // USDA: 2.4 mg per 8 fl oz of brewed decaf black tea; Chin et al. 2008: every decaf under 12 mg.
+    @Test
+    fun `decaf tea is the USDA figure and under the measured ceiling`() {
+        val decaf = CaffeineEstimates.tea(TeaType.DECAF).mg
+        assertEquals(2.4, decaf, 1e-9)
+        assert(decaf < 12.0)
+    }
+
     @Test
     fun `tea scales with volume`() {
         assertEquals(43.75, CaffeineEstimates.tea(TeaType.BLACK, volumeMl = 350.0).mg, 1e-9)

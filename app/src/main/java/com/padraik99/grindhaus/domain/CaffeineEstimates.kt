@@ -28,7 +28,7 @@ enum class BrewMethod {
 /** Robusta has roughly twice arabica's caffeine; blends sit between. */
 enum class Species { ARABICA, ROBUSTA, BLEND, DECAF, NOT_SURE }
 
-enum class TeaType { BLACK, GREEN, HERBAL }
+enum class TeaType { BLACK, GREEN, HERBAL, DECAF }
 
 /** A central estimate and the range it plausibly falls in, all in milligrams. */
 data class CaffeineEstimate(val mg: Double, val lowMg: Double, val highMg: Double) {
@@ -116,11 +116,14 @@ object CaffeineEstimates {
      * Tea per 240 mL mug. Tfouni et al. 2018 (Food Sci. Technol. 38:661) measured
      * 10-15 mg per 100 mL for black and green infusions brewed 3 minutes.
      * Herbal is caffeine-free unless the blend contains tea or mate; editable.
+     * Decaf: 2.4 mg per 8 fl oz, the USDA figure for brewed decaffeinated black tea; Chin et al.
+     * 2008 (J. Anal. Toxicol. 32:702) measured every decaf they tested at under 12 mg a serving.
      */
     fun teaDefaultMg(type: TeaType): Double = when (type) {
         TeaType.BLACK -> 30.0
         TeaType.GREEN -> 25.0
         TeaType.HERBAL -> 0.0
+        TeaType.DECAF -> 2.4
     }
 
     fun tea(type: TeaType, volumeMl: Double = MUG_ML): CaffeineEstimate {

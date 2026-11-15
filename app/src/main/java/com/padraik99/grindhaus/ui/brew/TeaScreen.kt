@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +57,7 @@ fun TeaType.label(): String = when (this) {
     TeaType.BLACK -> "Black"
     TeaType.GREEN -> "Green"
     TeaType.HERBAL -> "Herbal"
+    TeaType.DECAF -> "Decaf"
 }
 
 private fun TeaType.mgText(): String {
@@ -64,8 +66,8 @@ private fun TeaType.mgText(): String {
 }
 
 /**
- * Logging a tea: your saved teas first (most used at the top), then any black, green or
- * herbal. Long-press a saved tea to rename or remove it.
+ * Logging a tea: your saved teas first (most used at the top), then any black, green,
+ * herbal or decaf. Long-press a saved tea to rename or remove it.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -147,13 +149,17 @@ fun TeaScreen(
         }
 
         SectionLabel("Any other tea")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TeaType.entries.forEach { type ->
-                OutlinedButton(onClick = { onLog(type, null) }, modifier = Modifier.weight(1f).height(52.dp)) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(type.label(), color = GrindhausColors.FoamDim, fontSize = 14.sp)
-                        Text(type.mgText(), color = GrindhausColors.Muted, fontSize = 11.sp)
+        // Two by two, so each name and its caffeine sit on one line at any text size.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TeaType.entries.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pair.forEach { type ->
+                        OutlinedButton(onClick = { onLog(type, null) }, modifier = Modifier.weight(1f).height(52.dp)) {
+                            Text(type.label(), color = GrindhausColors.FoamDim, fontSize = 15.sp)
+                            Text(type.mgText(), color = GrindhausColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
                     }
+                    if (pair.size == 1) Box(Modifier.weight(1f))
                 }
             }
         }
@@ -203,7 +209,7 @@ private fun TeaForm(
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TeaType.entries.forEach { t -> Choice("${t.label()} · ${t.mgText()}", t == type) { type = t } }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

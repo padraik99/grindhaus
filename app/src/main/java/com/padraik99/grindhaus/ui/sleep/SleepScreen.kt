@@ -2,6 +2,9 @@ package com.padraik99.grindhaus.ui.sleep
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,13 +25,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -51,11 +57,14 @@ import com.padraik99.grindhaus.data.IntakeEvent
 import com.padraik99.grindhaus.domain.CaffeineModel
 import com.padraik99.grindhaus.domain.Cutoff
 import com.padraik99.grindhaus.domain.Dose
+import com.padraik99.grindhaus.domain.Drink
+import com.padraik99.grindhaus.domain.LastCall
 import com.padraik99.grindhaus.domain.SleepForecast
 import com.padraik99.grindhaus.domain.SleepForecaster
 import com.padraik99.grindhaus.ui.brew.StepButton
 import com.padraik99.grindhaus.ui.brew.clockTime
 import com.padraik99.grindhaus.ui.components.BrandHeader
+import com.padraik99.grindhaus.ui.components.Choice
 import com.padraik99.grindhaus.ui.components.NumberField
 import com.padraik99.grindhaus.ui.components.SectionLabel
 import com.padraik99.grindhaus.ui.components.TimeOfDayField
@@ -100,15 +109,28 @@ fun SleepScreen(
     ) {
         BrandHeader("Sleep")
         val f = state.forecast ?: return@Column
-        Tonight(f, state.doses, state.zone)
-        LastCall(f, state.teaType.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() } + " tea", state.zone)
+        // What if: a drink tapped under Last call, had now or a few hours from now.
+        var picked by rememberSaveable { mutableStateOf<String?>(null) }
+        var laterHours by rememberSaveable { mutableIntStateOf(0) }
+        val drink = f.lastCalls.firstOrNull { it.drink.name == picked }?.drink
+        val whatIf = drink?.let { WhatIf(it, Dose(it.mg, f.now.plus(Duration.ofHours(laterHours.toLong())))) }
+        Tonight(f, state.doses, state.zone, whatIf)
+        LastCalls(
+            f = f,
+            doses = state.doses,
+            zone = state.zone,
+            whatIf = whatIf,
+            laterHours = laterHours,
+            onPick = { name -> picked = if (picked == name) null else name; laterHours = 0 },
+            onLater = { laterHours = it },
+        )
         Today(state.today, state.zone, onLogOther, onRemove)
         YourSleep(state, f, onBedtime, onHalfLife, onLimit)
     }
 }
 
 @Composable
-private fun Tonight(f: SleepForecast, doses: List<Dose>, zone: ZoneId) {
+private fun Tonight(f: SleepForecast, doses: List<Dose>, zone: ZoneId, whatIf: WhatIf?) {
     val bed = clockTime(f.bedtime.toInstant(), zone)
     val tone = if (f.overLimit) GrindhausColors.Bitter else GrindhausColors.Peak
     Column(Modifier.fillMaxWidth().panel(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -130,7 +152,7 @@ private fun Tonight(f: SleepForecast, doses: List<Dose>, zone: ZoneId) {
                 fontWeight = FontWeight.SemiBold,
             )
         }
-        CaffeineChart(f, doses, zone)
+        CaffeineChart(f, doses, zone, whatIf?.dose)
         Text(
             String.format(
                 Locale.US,
@@ -140,7 +162,7 @@ private fun Tonight(f: SleepForecast, doses: List<Dose>, zone: ZoneId) {
                 hours(SleepForecaster.band(f.halfLifeHours).start),
                 hours(SleepForecaster.band(f.halfLifeHours).endInclusive),
                 mg(f.limitMg),
-            ),
+            ) + (whatIf?.let { " Pale line: with ${it.drink.name.lowercase(Locale.US)} at ${clockTime(it.dose.takenAt, zone)}." } ?: ""),
             color = GrindhausColors.Muted,
             fontSize = 12.sp,
             lineHeight = 17.sp,
@@ -159,30 +181,60 @@ private fun Stat(label: String, valueMg: Double, color: Color, modifier: Modifie
     }
 }
 
+/** A drink being tried out, and when. */
+private data class WhatIf(val drink: Drink, val dose: Dose)
+
 @Composable
-private fun LastCall(f: SleepForecast, teaName: String, zone: ZoneId) {
-    Column(Modifier.fillMaxWidth().panel(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+private fun LastCalls(
+    f: SleepForecast,
+    doses: List<Dose>,
+    zone: ZoneId,
+    whatIf: WhatIf?,
+    laterHours: Int,
+    onPick: (String) -> Unit,
+    onLater: (Int) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().panel(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SectionLabel("Last call")
-        CutoffRow("A usual brew", f.usualBrewMg, f.usualBrewCutoff, f.now, zone)
-        CutoffRow(teaName, f.teaMg, f.teaCutoff, f.now, zone)
+        Box(Modifier.height(4.dp))
+        f.lastCalls.forEach { call ->
+            val open = whatIf?.drink == call.drink
+            // An opened drink scrolls fully into view, so its times and answer aren't below the fold.
+            val requester = remember { BringIntoViewRequester() }
+            LaunchedEffect(open) { if (open) requester.bringIntoView() }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .bringIntoViewRequester(requester)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (open) GrindhausColors.SurfaceHigh else Color.Transparent)
+                    .clickable(onClickLabel = if (open) "Close" else "What if") { onPick(call.drink.name) }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CutoffRow(call, f.now, zone)
+                if (open && whatIf != null) WhatIfResult(f, doses, whatIf, laterHours, zone, onLater)
+            }
+        }
         Text(
-            "A usual brew is the middle of your last ten. These are the latest times each still keeps tonight under your limit.",
+            "Tap one to see what it would leave in you tonight. A usual brew is the middle of your last ten.",
             color = GrindhausColors.Muted,
             fontSize = 12.sp,
             lineHeight = 17.sp,
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }
 
 @Composable
-private fun CutoffRow(name: String, doseMg: Double, cutoff: Cutoff, now: Instant, zone: ZoneId) {
+private fun CutoffRow(call: LastCall, now: Instant, zone: ZoneId) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(name, color = GrindhausColors.Foam, fontSize = 16.sp)
-            Text("~${mg(doseMg)}", color = GrindhausColors.Muted, fontSize = 12.sp)
+            Text(call.drink.name, color = GrindhausColors.Foam, fontSize = 16.sp)
+            Text("~${mg(call.drink.mg)}", color = GrindhausColors.Muted, fontSize = 12.sp)
         }
         Column(horizontalAlignment = Alignment.End) {
-            when (cutoff) {
+            when (val cutoff = call.cutoff) {
                 is Cutoff.Until -> {
                     Text("by ${clockTime(cutoff.at, zone)}", color = GrindhausColors.Crema, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text(inTime(now, cutoff.at), color = GrindhausColors.Muted, fontSize = 12.sp)
@@ -191,6 +243,40 @@ private fun CutoffRow(name: String, doseMg: Double, cutoff: Cutoff, now: Instant
                 Cutoff.Passed -> Text("not tonight", color = GrindhausColors.Muted, fontSize = 15.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun WhatIfResult(f: SleepForecast, doses: List<Dose>, whatIf: WhatIf, laterHours: Int, zone: ZoneId, onLater: (Int) -> Unit) {
+    val with = SleepForecaster.peakWith(doses, whatIf.dose, f.bedtime.toInstant(), f.halfLifeHours)
+    val over = with > f.limitMg
+    val tone = if (over) GrindhausColors.Bitter else GrindhausColors.Peak
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(0 to "now", 1 to "+1 h", 2 to "+2 h", 3 to "+3 h").forEach { (h, label) ->
+            Choice(label, laterHours == h) { onLater(h) }
+        }
+    }
+    Text(
+        String.format(
+            Locale.US,
+            "Had at %s, after %s you'd have %s, instead of %s.",
+            clockTime(whatIf.dose.takenAt, zone),
+            clockTime(f.bedtime.toInstant(), zone),
+            mg(with),
+            mg(f.peakAfterBedMg),
+        ),
+        color = GrindhausColors.FoamDim,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    )
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(8.dp).background(tone, CircleShape))
+        Text(
+            if (over) "${mg(with - f.limitMg)} over your ${mg(f.limitMg)} limit" else "Under your ${mg(f.limitMg)} limit",
+            color = tone,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -292,7 +378,7 @@ private fun YourSleep(
 
 /** Caffeine across the day: the line at the set half-life, a band around it, the limit, now and the sleep window. */
 @Composable
-private fun CaffeineChart(f: SleepForecast, doses: List<Dose>, zone: ZoneId) {
+private fun CaffeineChart(f: SleepForecast, doses: List<Dose>, zone: ZoneId, whatIf: Dose?) {
     val measurer = rememberTextMeasurer()
     val band = SleepForecaster.band(f.halfLifeHours)
     val samples = remember(f, doses) {
@@ -307,8 +393,15 @@ private fun CaffeineChart(f: SleepForecast, doses: List<Dose>, zone: ZoneId) {
             )
         }
     }
-    val top = remember(samples, f.limitMg) {
-        val highest = maxOf(samples.maxOf { it.third }, f.limitMg * 1.6, 40.0)
+    val ghost = remember(f, doses, whatIf) {
+        whatIf?.let { extra ->
+            val n = samples.size - 1
+            val span = Duration.between(f.chartStart, f.chartEnd).toMillis()
+            (0..n).map { i -> CaffeineModel.totalAt(doses + extra, f.chartStart.plusMillis(span * i / n), f.halfLifeHours) }
+        }
+    }
+    val top = remember(samples, ghost, f.limitMg) {
+        val highest = maxOf(samples.maxOf { it.third }, ghost?.maxOrNull() ?: 0.0, f.limitMg * 1.6, 40.0)
         ceil(highest / 25.0) * 25.0
     }
     val labelStyle = TextStyle(color = GrindhausColors.Muted, fontSize = 10.sp)
@@ -374,6 +467,20 @@ private fun CaffeineChart(f: SleepForecast, doses: List<Dose>, zone: ZoneId) {
             if (started) lineTo(nowX, y(f.nowMg))
         }
         drawPath(past, GrindhausColors.Crema, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
+
+        // What if: the same day with the tapped drink added.
+        if (ghost != null && whatIf != null) {
+            val path = Path().apply {
+                ghost.forEachIndexed { i, mg -> if (i == 0) moveTo(xi(i), y(mg)) else lineTo(xi(i), y(mg)) }
+            }
+            drawPath(path, GrindhausColors.Foam.copy(alpha = 0.6f), style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+            drawCircle(
+                GrindhausColors.Foam.copy(alpha = 0.8f),
+                3.5.dp.toPx(),
+                Offset(x(whatIf.takenAt), size.height - padBottom),
+                style = Stroke(1.5.dp.toPx()),
+            )
+        }
 
         // Now.
         drawLine(GrindhausColors.Foam.copy(alpha = 0.35f), Offset(nowX, padTop), Offset(nowX, size.height - padBottom), 1.dp.toPx())
